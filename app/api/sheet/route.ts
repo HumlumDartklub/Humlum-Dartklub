@@ -1,2 +1,2 @@
-// app/api/sheet/route.ts  (alias -> den rigtige handler)
+// app/api/sheet/route.ts
 export { GET } from "../sheets/route";
