@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getForsideData, SheetMap } from "../lib/getForsideData";
 import Link from "next/link";
+import { getForsideData } from "../lib/getForsideData";
+import type { SheetMap } from "../lib/getForsideData";
+
 
 type ViewState = { map: SheetMap; updated?: string };
 

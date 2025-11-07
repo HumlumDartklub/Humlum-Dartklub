@@ -1,71 +1,46 @@
 // lib/getForsideData.ts
 
-export type ForsideRow = {
-  id?: string | number;
-  title?: string;
-  body?: string;
-  image?: string;
-  order?: number;
+export type SheetMap = {
+  FORSIDE?: any[];
+  NYHEDER?: any[];
+  [key: string]: any[] | undefined;
 };
 
-async function fetchJson(url: string): Promise<any | null> {
-  try {
-    const res = await fetch(url, { method: "GET", cache: "no-store" });
-    if (!res.ok) return null;
-    // Forsøg JSON – enkelte backends sender text med JSON-indhold
-    const ct = res.headers.get("content-type") || "";
-    if (ct.includes("application/json")) {
-      return await res.json();
-    } else {
-      const txt = await res.text();
-      try { return JSON.parse(txt); } catch { return null; }
-    }
-  } catch {
-    return null;
-  }
-}
-
-function normalizeRows(data: any): ForsideRow[] {
-  if (!data) return [];
-  const rows =
-    Array.isArray(data) ? data
-    : Array.isArray(data.rows) ? data.rows
-    : Array.isArray(data.data) ? data.data
-    : Array.isArray(data.items) ? data.items
-    : Array.isArray(data.FORSIDE) ? data.FORSIDE
-    : [];
-
-  return rows.map((r: any) => ({
-    id: r.id ?? r.ID ?? undefined,
-    title: String(r.title ?? r.TITLE ?? r.headline ?? "").trim(),
-    body: String(r.body ?? r.body_md ?? r.text ?? "").trim(),
-    image: String(r.image ?? r.img ?? "").trim(),
-    order: Number(r.order ?? r.sort ?? 9999),
-  }));
-}
+type ForsideResponse =
+  | { ok?: boolean; rows?: any[]; items?: any[]; itemsNormalized?: any[]; updated?: string }
+  | any;
 
 /**
- * Forsøger flere kilder i rækkefølge:
- * 1) /api/sheets?sheet=FORSIDE   (proxy til Apps Script)
- * 2) /api/sheets?tab=FORSIDE
- * 3) /api/sheet?tab=FORSIDE      (gammel lokal route)
+ * Henter FORSIDE-data fra dit Sheets-API.
+ * Bruger i denne rækkefølge:
+ *   1) NEXT_PUBLIC_FORSIDE_ENDPOINT  (direkte endpoint der returnerer {rows:[...]})
+ *   2) NEXT_PUBLIC_SHEET_API?sheet=FORSIDE
+ *   3) /api/sheets?sheet=FORSIDE  (lokal route i appen)
  */
-export async function getForsideData(): Promise<ForsideRow[]> {
-  const tries = [
-    `/api/sheets?sheet=FORSIDE&cb=${Date.now()}`,
-    `/api/sheets?tab=FORSIDE&cb=${Date.now()}`,
-    `/api/sheet?tab=FORSIDE&cb=${Date.now()}`,
-  ];
+export async function getForsideData(): Promise<{ map: SheetMap; updated?: string }> {
+  const envA = process.env.NEXT_PUBLIC_FORSIDE_ENDPOINT?.trim();
+  const envB = process.env.NEXT_PUBLIC_SHEET_API?.trim();
 
-  for (const url of tries) {
-    const data = await fetchJson(url);
-    const rows = normalizeRows(data);
-    if (rows.length) {
-      // sortér efter order hvis angivet
-      return rows.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-    }
+  const endpoint =
+    envA ||
+    (envB ? `${envB}${envB.includes("?") ? "&" : "?"}sheet=FORSIDE` : `/api/sheets?sheet=FORSIDE`);
+
+  try {
+    const res = await fetch(endpoint, { cache: "no-store" });
+    const data: ForsideResponse = await res.json();
+
+    // Normaliser rækker
+    let rows: any[] = [];
+    if (Array.isArray(data?.rows)) rows = data.rows;
+    else if (Array.isArray(data?.items)) rows = data.items;
+    else if (Array.isArray(data?.itemsNormalized)) rows = data.itemsNormalized;
+
+    const updated: string | undefined = data?.updated ? String(data.updated) : undefined;
+
+    const map: SheetMap = { FORSIDE: rows };
+    return { map, updated };
+  } catch (_err) {
+    // Returnér tom map ved fejl – så appen ikke crasher.
+    return { map: {}, updated: undefined };
   }
-
-  // Ingen data – returner tomt i stedet for at kaste, så UI kan loade
-  return [];
 }
