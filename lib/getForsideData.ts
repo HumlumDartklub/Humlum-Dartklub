@@ -1,46 +1,85 @@
 // lib/getForsideData.ts
 
-export type SheetMap = {
-  FORSIDE?: any[];
-  NYHEDER?: any[];
-  [key: string]: any[] | undefined;
+export type SheetItem = {
+  id?: string;
+  title?: string;
+  body?: string;
+  body_md?: string;
+  image?: string;
+  status?: string;
+  visible?: string; // "YES"/"NO"
+  order?: number;
+  start_on?: string;
+  end_on?: string;
+  channel?: string; // "PUBLIC"/"INTERNAL"/...
+  link?: string;
+  pin?: string;
+  date?: string;
 };
 
-type ForsideResponse =
+export type SheetMap = {
+  FORSIDE?: SheetItem[];
+  NYHEDER?: SheetItem[];
+  TICKER?: { message: string; title?: string; pin?: string; date?: string; order?: number; start_on?: string; end_on?: string; channel?: string }[];
+  [key: string]: any;
+};
+
+// Hjælpere
+type SheetApiResponse =
   | { ok?: boolean; rows?: any[]; items?: any[]; itemsNormalized?: any[]; updated?: string }
   | any;
 
-/**
- * Henter FORSIDE-data fra dit Sheets-API.
- * Bruger i denne rækkefølge:
- *   1) NEXT_PUBLIC_FORSIDE_ENDPOINT  (direkte endpoint der returnerer {rows:[...]})
- *   2) NEXT_PUBLIC_SHEET_API?sheet=FORSIDE
- *   3) /api/sheets?sheet=FORSIDE  (lokal route i appen)
- */
-export async function getForsideData(): Promise<{ map: SheetMap; updated?: string }> {
-  const envA = process.env.NEXT_PUBLIC_FORSIDE_ENDPOINT?.trim();
-  const envB = process.env.NEXT_PUBLIC_SHEET_API?.trim();
-
-  const endpoint =
-    envA ||
-    (envB ? `${envB}${envB.includes("?") ? "&" : "?"}sheet=FORSIDE` : `/api/sheets?sheet=FORSIDE`);
-
+async function safeJson<T=any>(url: string): Promise<T | null> {
   try {
-    const res = await fetch(endpoint, { cache: "no-store" });
-    const data: ForsideResponse = await res.json();
-
-    // Normaliser rækker
-    let rows: any[] = [];
-    if (Array.isArray(data?.rows)) rows = data.rows;
-    else if (Array.isArray(data?.items)) rows = data.items;
-    else if (Array.isArray(data?.itemsNormalized)) rows = data.itemsNormalized;
-
-    const updated: string | undefined = data?.updated ? String(data.updated) : undefined;
-
-    const map: SheetMap = { FORSIDE: rows };
-    return { map, updated };
-  } catch (_err) {
-    // Returnér tom map ved fejl – så appen ikke crasher.
-    return { map: {}, updated: undefined };
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
   }
 }
+
+function pickArray(p: any): any[] {
+  if (!p) return [];
+  if (Array.isArray(p.rows)) return p.rows;
+  if (Array.isArray(p.itemsNormalized)) return p.itemsNormalized;
+  if (Array.isArray(p.items)) return p.items;
+  return [];
+}
+
+function apiUrl(tab: string): string {
+  const base = process.env.NEXT_PUBLIC_SHEET_API;
+  // Brug GAS direkte hvis sat, ellers vores lokale API-proxy
+  return base
+    ? `${base}?tab=${encodeURIComponent(tab)}`
+    : `/api/sheets?sheet=${encodeURIComponent(tab)}`;
+}
+
+// Public API
+export async function getForsideData(): Promise<{ map: SheetMap; updated?: string }> {
+  const map: SheetMap = {};
+
+  const forside = await safeJson<SheetApiResponse>(apiUrl("FORSIDE"));
+  map.FORSIDE = pickArray(forside);
+
+  const nyheder = await safeJson<SheetApiResponse>(apiUrl("NYHEDER"));
+  map.NYHEDER = pickArray(nyheder);
+
+  const ticker = await safeJson<SheetApiResponse>(apiUrl("TICKER"));
+  map.TICKER = pickArray(ticker).map((r: any) => ({
+    message: r?.message ?? "",
+    title: r?.title ?? "",
+    pin: r?.pin ?? "",
+    date: r?.date ?? "",
+    order: Number(r?.order ?? 0),
+    start_on: r?.start_on ?? "",
+    end_on: r?.end_on ?? "",
+    channel: r?.channel ?? ""
+  })).filter((r: any) => String(r.message || "").trim() !== "");
+
+  const updated = (forside as any)?.updated || (nyheder as any)?.updated || (ticker as any)?.updated;
+
+  return { map, updated };
+}
+
+export default getForsideData;
