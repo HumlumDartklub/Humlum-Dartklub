@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="da">
+<meta charset="utf-8" />
+<title>Humlum CMS Test</title>
+<body>
+  <h2>Live data test</h2>
+  <p><strong>Hero title:</strong> <span id="hero-title">Henter data...</span></p>
+
+  <script>
+    // >>> INDSÆT DIN GOOGLE WEB-APP URL MELLEM ANFØRSELSTEGNENE NEDENFOR <<<
+    // Eksempel på format: https://script.google.com/macros/s/AKfyc.../exec
+    const HUMLUM_API = "https://script.google.com/macros/s/AKfycbwcvBiCrb0jiejbhSqieI_28hnY0q5YB0ViiZvXwaAie4o_SzlT6SMju6-9EwuvYY40mw/exec";
+
+    async function loadSheet(sheet) {
+      const res = await fetch(`${HUMLUM_API}?sheet=${encodeURIComponent(sheet)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+    function pick(rows, section, key) {
+      const r = rows.find(x => x.section === section && x.key === key);
+      return r ? (r.value ?? "") : "";
+    }
+    (async () => {
+      const rows = await loadSheet("FORSIDE");
+      document.getElementById("hero-title").textContent = pick(rows, "hero", "title");
+    })().catch(err => {
+      document.getElementById("hero-title").textContent = "Fejl: " + err.message;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

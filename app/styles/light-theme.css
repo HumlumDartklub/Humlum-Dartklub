@@ -1,0 +1,98 @@
+/* ========== Humlum Dartklub Light Theme (global farvepolitik) ========== */
+:root{
+  --bg:#f8fafc;             /* lys sidebaggrund */
+  --fg:#0f172a;             /* mørk tekst (slate-900) */
+  --surface:#ffffff;        /* kort/sektioner */
+  --muted:#475569;          /* sekundær tekst */
+  --border:#e5e7eb;         /* lyse kanter */
+  --accent:#16a34a;         /* grøn primær */
+  --accent-strong:#15803d;  /* hover-grøn */
+  --link:#0f9d58;           /* link-grøn */
+  --hero-grad:linear-gradient(180deg,#ecfeff,#ffffff 50%,#f0fdfa);
+}
+
+/* Tving lyst tema uanset OS-indstilling */
+:root, html, body{ color-scheme: light; }
+
+html, body{
+  background: var(--bg) !important;
+  color: var(--fg) !important;
+}
+
+/* Links */
+a{ color: var(--link); text-decoration: none; }
+a:hover{ color: var(--accent-strong); }
+
+/* Header/nav (kun farver) */
+header, .navbar{
+  background: rgba(255,255,255,.95) !important;
+  color: var(--fg) !important;
+  border-bottom: 1px solid var(--border) !important;
+  backdrop-filter: blur(8px) !important;
+}
+header a, .navbar a{ color: var(--fg) !important; }
+header a:hover, .navbar a:hover{ color: var(--accent-strong) !important; }
+
+/* Knapper (kun farver) */
+button, .btn, .cta{
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+}
+button:hover, .btn:hover, .cta:hover{ background: var(--accent-strong) !important; }
+
+/* Inputs */
+input, select, textarea{
+  background:#fff !important; color:var(--fg) !important; border:1px solid #d1d5db !important;
+}
+
+/* Footer */
+footer{ background:#1f2937 !important; color:#fff !important; }
+footer a{ color:#c7f9cc !important; } footer a:hover{ color:#86efac !important; }
+
+/* Hero fallback (hvis en side bruger disse klasser) */
+.hero, .hero-section{ background: var(--hero-grad) !important; color: var(--fg) !important; }
+
+/* Kort / sektioner – farver, ikke layout */
+.card, .surface, .section, .box, .content-wrapper{
+  background: var(--surface) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06) !important;
+}
+
+/* ===========================================================
+   Neutraliser "mørk tema"-utilities på ALLE sider
+   =========================================================== */
+
+/* Mørke baggrunde -> lys */
+.bg-black,
+[class*="bg-neutral-9"], [class^="bg-neutral-9"],
+[class*="bg-zinc-9"],   [class^="bg-zinc-9"],
+[class*="bg-slate-9"],  [class^="bg-slate-9"]{
+  background-color:#ffffff !important;
+  color:var(--fg) !important;
+  border-color:var(--border) !important;
+}
+
+/* Lyse/hvide tekster -> mørk, så de kan læses på lys baggrund */
+.text-white, .text-zinc-100, .text-neutral-100, .text-slate-100,
+.text-zinc-200, .text-neutral-200, .text-slate-200,
+.text-zinc-300, .text-neutral-300, .text-slate-300{
+  color: var(--fg) !important;
+}
+
+/* Hårde mørke kanter -> lyse */
+.border-black,
+[class*="border-neutral-9"], [class^="border-neutral-9"],
+[class*="border-zinc-9"],   [class^="border-zinc-9"]{
+  border-color: var(--border) !important;
+}
+
+/* Grønne borders på lys baggrund -> blød */
+[class*="border-emerald-6"]{ border-color: var(--border) !important; }
+
+/* Gradients med emerald -> brug primær grøn */
+.from-emerald-600, .bg-emerald-600{ background-color: var(--accent) !important; }
+.hover\:bg-emerald-700:hover{ background-color: var(--accent-strong) !important; }
