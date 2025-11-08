@@ -24,6 +24,7 @@ export default function BlivMedlemFormularPage() {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>("");
+  const [kvitteringsRef, setKvitteringsRef] = useState<string>("");
 
   const [form, setForm] = useState<FormState>({
     pakke: "",
@@ -35,6 +36,8 @@ export default function BlivMedlemFormularPage() {
   });
 
   const [info, setInfo] = useState<PakkeInfo | null>(null);
+
+  // Hvis du har et deeplink til MobilePay, sæt det i .env.local som NEXT_PUBLIC_MOBILEPAY_LINK
   const mobilepay = process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "";
 
   // Læs ?pakke= og slå pris+features op fra localStorage (HDK_PAKKER)
@@ -65,17 +68,43 @@ export default function BlivMedlemFormularPage() {
     if (!form.email) return setError("Udfyld e-mail.");
     if (!form.accepteret) return setError("Du skal acceptere klubbens vedtægter.");
 
+    // Backend forventer disse felter (matcher /api/join + Apps Script)
+    const payload = {
+      name: form.navn,
+      email: form.email,
+      phone: form.telefon,
+      package_id: form.pakke,
+      notes: form.kommentar,
+      accepted_rules: form.accepteret,
+      payment_method: mobilepay ? "mobilepay" : "cash", // kan ændres senere
+    };
+
     setSending(true);
     try {
       const res = await fetch("/api/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || "Serverfejl");
+
+      // ROBUST PARSING — ingen Unexpected end of JSON input
+      const text = await res.text().catch(() => "");
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+
+      if (!res.ok || !data?.ok) {
+        const msg = (data && (data.error || data.message)) || (text || `Serverfejl (HTTP ${res.status})`);
+        throw new Error(msg);
       }
+
+      // Forsøg at hente en reference/row fra backend (hvis udsendt)
+      const ref =
+        data?.result?.join_id ||
+        data?.result?.row ||
+        data?.result?.id ||
+        "";
+      setKvitteringsRef(String(ref || ""));
+
       setSent(true);
     } catch (err: any) {
       setError(err?.message || "Noget gik galt. Prøv igen.");
@@ -89,13 +118,18 @@ export default function BlivMedlemFormularPage() {
       <main className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-10">
         <h1 className="text-3xl font-bold mb-2 text-[var(--fg)]">Tak for din tilmelding!</h1>
         <p className="text-slate-700">
-          Vi har modtaget din ansøgning til <span className="font-semibold">{form.pakke}</span>. Du hører fra os hurtigst muligt.
+          Vi har modtaget din ansøgning til <span className="font-semibold">{form.pakke}</span>.
+          {kvitteringsRef ? <> Din reference: <span className="font-semibold">{kvitteringsRef}</span>.</> : null}
         </p>
 
-        {mobilepay && (
+        {mobilepay ? (
           <a href={mobilepay} className="mt-6 inline-block btn btn-primary">
             Betal kontingent med MobilePay
           </a>
+        ) : (
+          <p className="mt-6 text-slate-700">
+            Betal i klubben (kontant eller via MobilePay i baren). Medbring evt. din reference.
+          </p>
         )}
 
         <div className="mt-8">

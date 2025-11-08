@@ -1,15 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type FormState = {
-  pakke: string;
-  navn: string;
-  email: string;
-  telefon: string;
-  kommentar: string;
-  accepteret: boolean;
-};
+import { useEffect, useMemo, useState } from "react";
 
 type PakkeInfo = {
   pakke?: string;
@@ -18,216 +9,235 @@ type PakkeInfo = {
   badge?: string;
 };
 
-function safeClean(v: any) { return String(v ?? "").trim(); }
+type Form = {
+  niveau: string;
+  koen: "Mand" | "Kvinde" | "Andet";
+  navn: string;
+  email: string;
+  telefon: string;
+  foedselsaar: string;
+  adresse: string;
+  postnrBy: string;
+  note: string;
+};
 
-export default function BlivMedlemFormularPage() {
-  const [sent, setSent] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string>("");
+function clean(s: any) { return String(s ?? "").trim(); }
 
-  const [form, setForm] = useState<FormState>({
-    pakke: "",
+export default function TilmeldingPage() {
+  console.info("HDK TILMELDING v3"); // versionsmarkør til at bekræfte at siden kører ny kode
+
+  const [pakke, setPakke] = useState<string>("");
+  const [info, setInfo] = useState<PakkeInfo | null>(null);
+
+  const [f, setF] = useState<Form>({
+    niveau: "Hygge",
+    koen: "Mand",
     navn: "",
     email: "",
     telefon: "",
-    kommentar: "",
-    accepteret: false,
+    foedselsaar: "",
+    adresse: "",
+    postnrBy: "",
+    note: "",
   });
 
-  const [info, setInfo] = useState<PakkeInfo | null>(null);
-  const mobilepay = process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "";
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>("");
+  const [ok, setOk] = useState<boolean>(false);
+  const [refId, setRefId] = useState<string>("");
 
-  // Læs ?pakke= og slå pris+features op fra localStorage (HDK_PAKKER)
+  const mobilepayLink = process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "";
+
+  // læs ?pakke= og pakkeinfo fra localStorage (HDK_PAKKER)
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const u = new URL(window.location.href);
-    const pakke = u.searchParams.get("pakke") || "";
-    setForm((f) => ({ ...f, pakke }));
+    const url = new URL(window.location.href);
+    const p = url.searchParams.get("pakke") || "";
+    setPakke(p);
 
     try {
       const all = JSON.parse(localStorage.getItem("HDK_PAKKER") || "[]");
       const found = Array.isArray(all)
-        ? (all.find((x: any) => safeClean(x.pakke) === pakke) as PakkeInfo | undefined)
+        ? (all.find((x: any) => clean(x.pakke) === p) as PakkeInfo | undefined)
         : undefined;
-      setInfo(found || null);
+      setInfo(found || { pakke: p });
     } catch {
-      setInfo(null);
+      setInfo({ pakke: p });
     }
   }, []);
 
+  const prisLabel = useMemo(() => {
+    return info?.pris_pr_mdr ? `${info.pris_pr_mdr} kr/md (fast pris)` : "";
+  }, [info]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
+    setErr("");
 
-    if (!form.pakke) return setError("Pakke mangler. Gå tilbage og vælg en pakke.");
-    if (!form.navn) return setError("Udfyld navn.");
-    if (!form.email) return setError("Udfyld e-mail.");
-    if (!form.accepteret) return setError("Du skal acceptere klubbens vedtægter.");
+    if (!pakke) return setErr("Pakke mangler. Gå tilbage og vælg en pakke.");
+    if (!f.navn) return setErr("Udfyld navn.");
+    if (!f.email) return setErr("Udfyld e-mail.");
 
-    setSending(true);
+    const payload = {
+      // felter vores /api/join + Apps Script forventer
+      name: f.navn,
+      email: f.email,
+      phone: f.telefon,
+      address: f.adresse,
+      zip_city: f.postnrBy,
+      birth_year: f.foedselsaar,
+      package_id: pakke,
+      notes: f.note,
+      level: f.niveau,
+      gender: f.koen,
+      payment_method: mobilepayLink ? "mobilepay" : "cash",
+    };
+
+    setBusy(true);
     try {
       const res = await fetch("/api/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || "Serverfejl");
+
+      // Robust parsing—ingen “Unexpected end of JSON input”
+      const text = await res.text().catch(() => "");
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+
+      if (!res.ok || !data?.ok) {
+        const msg = (data && (data.error || data.message)) || (text || `Serverfejl (HTTP ${res.status})`);
+        throw new Error(msg);
       }
-      setSent(true);
-    } catch (err: any) {
-      setError(err?.message || "Noget gik galt. Prøv igen.");
+
+      // reference hvis backend sender noget brugbart tilbage
+      const ref =
+        data?.result?.join_id ||
+        data?.result?.row ||
+        data?.result?.id ||
+        "";
+      setRefId(String(ref || ""));
+
+      setOk(true);
+    } catch (e: any) {
+      setErr(e?.message || "Noget gik galt. Prøv igen.");
     } finally {
-      setSending(false);
+      setBusy(false);
     }
   }
 
-  if (sent) {
+  if (ok) {
     return (
-      <main className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-10">
-        <h1 className="text-3xl font-bold mb-2 text-[var(--fg)]">Tak for din tilmelding!</h1>
-        <p className="text-slate-700">
-          Vi har modtaget din ansøgning til <span className="font-semibold">{form.pakke}</span>. Du hører fra os hurtigst muligt.
-        </p>
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+        <div className="rounded-2xl border border-lime-300 bg-white p-6">
+          <div className="text-sm text-emerald-700 mb-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-lime-500 mr-2" />
+            Tilmelding
+          </div>
+          <h1 className="text-2xl font-bold">Tak for din indmeldelse</h1>
+          <p className="mt-2 text-slate-700">
+            Pakke: <span className="font-semibold">{pakke || "—"}</span>
+            {prisLabel ? <> · Pris: <span className="font-semibold">{prisLabel}</span></> : null}
+            {refId ? <> · Reference: <span className="font-semibold">{refId}</span></> : null}
+          </p>
 
-        {mobilepay && (
-          <a href={mobilepay} className="mt-6 inline-block btn btn-primary">
-            Betal kontingent med MobilePay
-          </a>
-        )}
+          {mobilepayLink ? (
+            <a href={mobilepayLink} className="mt-6 inline-block px-5 py-2 rounded-xl bg-black text-white hover:opacity-90">
+              Betal kontingent med MobilePay
+            </a>
+          ) : (
+            <p className="mt-6 text-slate-700">
+              Betal i klubben (kontant eller MobilePay i baren). Medbring evt. din reference.
+            </p>
+          )}
 
-        <div className="mt-8">
-          <a href="/bliv-medlem" className="underline text-emerald-700 hover:text-emerald-800">
-            Tilbage til medlemsoversigt
-          </a>
+          <div className="mt-6">
+            <a href="/bliv-medlem" className="text-emerald-700 underline">Tilbage til medlemsoversigt</a>
+          </div>
         </div>
       </main>
     );
   }
 
-  const featuresArr =
-    info?.features
-      ? safeClean(info.features).split(/[;,]/).map((s) => safeClean(s)).filter(Boolean)
-      : [];
-
   return (
-    <main className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-3xl font-bold mb-1 text-[var(--fg)]">Bliv medlem</h1>
-
-      {/* Pakke opsummering */}
-      <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-slate-600">Du har valgt pakken:</div>
-          {info?.badge && (
-            <span className="bg-emerald-100 text-emerald-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
-              {info.badge}
-            </span>
-          )}
+    <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="rounded-2xl border border-lime-300 bg-white p-6">
+        <div className="text-sm text-emerald-700 mb-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-lime-500 mr-2" />
+          Tilmelding
         </div>
-
-        <div className="text-xl font-bold text-emerald-700">{form.pakke || "—"}</div>
-
-        <div className="mt-2 text-slate-700">
-          <span className="font-semibold">Pris:</span>{" "}
-          {info?.pris_pr_mdr ? `${info.pris_pr_mdr} kr/md.` : "—"}
-        </div>
-
-        {featuresArr.length > 0 && (
-          <ul className="mt-2 text-sm text-slate-700 space-y-1">
-            {featuresArr.map((f, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <span className="text-emerald-600 text-lg">•</span>
-                {f}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <a href="/bliv-medlem" className="inline-block mt-3 text-xs underline text-emerald-700 hover:text-emerald-800">
-          Tilbage til medlemsoversigt
-        </a>
+        <h1 className="text-3xl font-bold">Pakke: {pakke || "—"}</h1>
+        {prisLabel && <div className="text-slate-700 mt-1">Pris: <span className="font-semibold">{prisLabel}</span></div>}
       </div>
 
-      <p className="text-slate-700 mb-6">Udfyld formularen. Vi vender tilbage hurtigst muligt.</p>
-
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-red-700">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-slate-700 mb-1">Pakke</label>
-          <input
-            value={form.pakke}
-            readOnly
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            placeholder="Pakke"
-            required
-            title="Pakke vælges på forrige side"
-          />
+          <label className="block text-sm text-slate-700 mb-1">Niveau</label>
+          <select className="input" value={f.niveau} onChange={e => setF({ ...f, niveau: e.target.value as Form["niveau"] })}>
+            <option>Hygge</option>
+            <option>Begynder</option>
+            <option>Let øvet</option>
+            <option>Øvet</option>
+          </select>
         </div>
 
         <div>
+          <label className="block text-sm text-slate-700 mb-1">Køn</label>
+          <div className="flex gap-2">
+            {(["Mand","Kvinde","Andet"] as const).map(k => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setF({ ...f, koen: k })}
+                className={`px-3 py-2 rounded-lg border ${f.koen===k ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-800 border-slate-300"}`}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="md:col-span-2">
           <label className="block text-sm text-slate-700 mb-1">Navn</label>
-          <input
-            value={form.navn}
-            onChange={(e) => setForm({ ...form, navn: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            placeholder="Dit navn"
-            required
-          />
+          <input className="input" value={f.navn} onChange={e => setF({ ...f, navn: e.target.value })} placeholder="Dit navn" required />
         </div>
 
         <div>
           <label className="block text-sm text-slate-700 mb-1">E-mail</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            placeholder="din@mail.dk"
-            required
-          />
+          <input type="email" className="input" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="din@mail.dk" required />
         </div>
 
         <div>
-          <label className="block text-sm text-slate-700 mb-1">Telefon</label>
-          <input
-            value={form.telefon}
-            onChange={(e) => setForm({ ...form, telefon: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            placeholder="12 34 56 78"
-          />
+          <label className="block text-sm text-slate-700 mb-1">Telefon (valgfri)</label>
+          <input className="input" value={f.telefon} onChange={e => setF({ ...f, telefon: e.target.value })} placeholder="12 34 56 78" />
         </div>
 
         <div>
-          <label className="block text-sm text-slate-700 mb-1">Kommentar</label>
-          <textarea
-            value={form.kommentar}
-            onChange={(e) => setForm({ ...form, kommentar: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            rows={4}
-            placeholder="Evt. spørgsmål eller ønsker"
-          />
+          <label className="block text-sm text-slate-700 mb-1">Fødselsår (valgfri)</label>
+          <input className="input" value={f.foedselsaar} onChange={e => setF({ ...f, foedselsaar: e.target.value })} placeholder="1982" />
         </div>
 
-        <label className="flex items-start gap-3 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={form.accepteret}
-            onChange={(e) => setForm({ ...form, accepteret: e.target.checked })}
-            className="mt-1"
-          />
-          <span>Jeg accepterer klubbens vedtægter.</span>
-        </label>
+        <div>
+          <label className="block text-sm text-slate-700 mb-1">Adresse (valgfri)</label>
+          <input className="input" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} placeholder="Adresse" />
+        </div>
 
-        <div className="pt-2">
-          <button type="submit" disabled={sending} className="w-full btn btn-primary disabled:opacity-60">
-            {sending ? "Sender..." : "Bliv medlem af Humlum Dartklub"}
+        <div>
+          <label className="block text-sm text-slate-700 mb-1">Postnr/By (valgfri)</label>
+          <input className="input" value={f.postnrBy} onChange={e => setF({ ...f, postnrBy: e.target.value })} placeholder="7600 Struer" />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm text-slate-700 mb-1">Bemærkning (valgfri)</label>
+          <textarea className="input" rows={4} value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="Jeg elsker dart!" />
+        </div>
+
+        {err && <div className="md:col-span-2 text-red-600 text-sm">{err}</div>}
+
+        <div className="md:col-span-2 flex justify-end">
+          <button type="submit" disabled={busy} className="px-5 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60">
+            {busy ? "Sender…" : "Send indmeldelse"}
           </button>
         </div>
       </form>

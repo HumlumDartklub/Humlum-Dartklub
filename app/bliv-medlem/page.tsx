@@ -30,38 +30,36 @@ const PLANS: Plan[] = [
   { key: "aktiv", pakke: "Aktiv", audience: "Voksen", pris_pr_mdr: 149, features: [
     "Fri træning", "Klubarrangementer", "Træningsaftener",
   ]},
-  { key: "premium", pakke: "Premium", audience: "Voksen", pris_pr_mdr: 199, badge:"Mest valgt", features: [
-    "For dig der vil være 110% klubmand",
-    "Fri træning",
-    "Klubtrøje",
-    "Turneringer & events",
+  { key: "premium", pakke: "Premium", audience: "Voksen", pris_pr_mdr: 199, features: [
+    "Alt i Aktiv", "Prioriteret booking", "Klubtrøje", "Sponsor-lodtrækninger",
+  ], badge: "ANBEFALET" },
+  { key: "junior", pakke: "Junior (U18)", audience: "Ung", pris_pr_mdr: 49, features: [
+    "Fri træning", "Klubarrangementer", "Fællesskab",
   ]},
-  { key: "ungdom", pakke: "Ungdom", audience: "U/18", pris_pr_mdr: 59, features: [
-    "Ungdomsmedlemskab med træning", "Træning", "Turneringer", "Mentorordning & ungdomsarrangementer",
+  { key: "familie", pakke: "Familie", audience: "Familie", pris_pr_mdr: 199, features: [
+    "2 personer inkluderet", "+49 kr pr. ekstra person", "Familieaftener",
   ]},
-  { key: "familie", pakke: "Familie", audience: "Hele familien", pris_pr_mdr: 269, features: [
-    "Hele husstanden kan spille og deltage",
-    "Fri træning for familien",
-    "Familieevents",
-    "Forældre-barn turneringer",
+  { key: "senior35", pakke: "Senior +35/+50", audience: "Senior", pris_pr_mdr: 79, features: [
+    "Formiddagshold", "Socialt fællesskab", "Let træning",
+  ]},
+  { key: "damepairs", pakke: "Damepairs", audience: "Dame", pris_pr_mdr: 79, features: [
+    "Træning og kampe", "Socialt miljø",
   ]},
 ];
 
-// Familie-prislogik
 const FAMILY_BASE_SIZE = 2;
-const FAMILY_BASE_PRICE = 269;    // for op til 2 personer
-const FAMILY_EXTRA_PER_PERSON = 50; // + pr. ekstra person udover 2
+const FAMILY_BASE_PRICE = 199;
+const FAMILY_EXTRA_PER_PERSON = 49;
 
-// Dropdowns
-const NIVEAUER = ["Hygge", "Øvet", "Turnering"] as const;
-const KOEN = ["Mand", "Kvinde", "Andet"] as const;
+function cls(...xs: any[]) { return xs.filter(Boolean).join(" "); }
 
 export default function BlivMedlemPage() {
-  // UI-state
-  const [selectedKey, setSelectedKey] = useState<string>("aktiv");
-  const selectedPlan = useMemo(() => PLANS.find(p => p.key === selectedKey)!, [selectedKey]);
+  const [selectedKey, setSelectedKey] = useState<string>("basis");
+  const [husstand, setHusstand] = useState<number>(FAMILY_BASE_SIZE);
+  const [niveau, setNiveau] = useState<string>("Begynder");
+  const [koen, setKoen] = useState<string>("Mand");
 
-  // Form
+  // kontaktfelter
   const [navn, setNavn] = useState("");
   const [email, setEmail] = useState("");
   const [telefon, setTelefon] = useState("");
@@ -69,84 +67,58 @@ export default function BlivMedlemPage() {
   const [postnrBy, setPostnrBy] = useState("");
   const [foedselsaar, setFoedselsaar] = useState("");
   const [note, setNote] = useState("");
-  const [niveau, setNiveau] = useState<typeof NIVEAUER[number]>("Hygge");
-  const [koen, setKoen] = useState<typeof KOEN[number]>("Mand");
 
-  // Kun ved familie
-  const [husstand, setHusstand] = useState<number>(2);
-
-  // Feedback
+  const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
-  // Pris pr. måned (dynamisk for Familie)
+  const selectedPlan = useMemo(() => PLANS.find(p => p.key === selectedKey)!, [selectedKey]);
+
   const prisMdr = useMemo(() => {
-    if (selectedPlan.key !== "familie") return selectedPlan.pris_pr_mdr;
+    if (selectedKey !== "familie") return selectedPlan?.pris_pr_mdr ?? 0;
     const extra = Math.max(0, (husstand - FAMILY_BASE_SIZE)) * FAMILY_EXTRA_PER_PERSON;
     return FAMILY_BASE_PRICE + extra;
-  }, [selectedPlan, husstand]);
+  }, [selectedKey, selectedPlan, husstand]);
 
-  const formRef = useRef<HTMLDivElement>(null);
-
-  // Gem pakkeinfo i localStorage (hvis du senere vil bruge det andre steder)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const data = PLANS.map(p => ({
-      pakke: p.pakke,
-      pris_pr_mdr: p.pris_pr_mdr,
-      features: p.features.join("; "),
-      badge: p.badge || "",
-    }));
-    localStorage.setItem("HDK_PAKKER", JSON.stringify(data));
+    // Gem planliste i localStorage (bruges af /bliv-medlem/tilmelding)
+    try {
+      const data = PLANS.map(p => ({ pakke: p.pakke, pris_pr_mdr: p.pris_pr_mdr, features: p.features, badge: p.badge || "" }));
+      localStorage.setItem("HDK_PAKKER", JSON.stringify(data));
+    } catch {}
   }, []);
 
-  function onChoosePlan(key: string) {
-    setSelectedKey(key);
-    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  }
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg("");
 
-  async function submit() {
-    setMsg(null);
-    if (!navn || !email) {
-      setMsg("Udfyld venligst navn og e-mail.");
-      return;
-    }
-    if (selectedPlan.key === "familie" && (!husstand || husstand < 2)) {
-      setMsg("Vælg husstand (min. 2 personer) for Familie-pakken.");
-      return;
-    }
+    // simple validering
+    if (!navn) return setMsg("Udfyld navn.");
+    if (!email) return setMsg("Udfyld e-mail.");
+
     setBusy(true);
     try {
-      const res = await fetch("/api/sheet", {
+      // >>>> ÆNDRET: Brug /api/join og robust svarhåndtering (ingen res.json())
+      const res = await fetch("/api/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({
-          tab: "MEDLEMMER",
-          data: {
-            ts: new Date().toISOString(),
-            // pakke & pris
-            pakke: selectedPlan.pakke,
-            periode: "måned",
-            pris_dkk: prisMdr,            // GEMMES som tal pr. måned
-            husstand: selectedPlan.key === "familie" ? husstand : "",
-            // niveau & køn
-            niveau,
-            koen,
-            // kontakt
-            navn,
-            email,
-            telefon,
-            adresse,
-            postnr_by: postnrBy,
-            foedselsaar,
-            note,
-            status: "NY",
-          },
+          name: navn,
+          email,
+          phone: telefon,
+          address: adresse,
+          zip_city: postnrBy,
+          birth_year: foedselsaar,
+          package_id: selectedPlan.pakke,
+          notes: note,
+          payment_method: "mobilepay" // eller "cash" – kan skiftes senere
         }),
       });
-      const json = await res.json();
-      if (!res.ok || json.ok === false || json.error) throw new Error(json.error || "Kunne ikke gemme.");
-      setMsg("Tak! Din indmeldelse er modtaget – vi vender tilbage pr. mail.");
+      const text = await res.text();
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+      if (!res.ok || !data?.ok) throw new Error((data && data.error) || `Kunne ikke gemme (HTTP ${res.status})`);
+      setMsg("Tak! Din indmeldelse er modtaget – du kan betale via MobilePay/kontant i klubben. Gem din reference fra kvitteringen.");
+
       // ryd felter (beholder valgt pakke)
       setNavn(""); setEmail(""); setTelefon(""); setAdresse(""); setPostnrBy(""); setFoedselsaar(""); setNote("");
     } catch (e: any) {
@@ -168,152 +140,86 @@ export default function BlivMedlemPage() {
         <p className="section-subtitle">Vælg den pakke der passer til dig. Du kan altid opgradere senere.</p>
       </div>
 
-      {/* Kort-grid med pakker */}
-      <section className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Pakker */}
+      <section className="grid gap-6 lg:grid-cols-3 mt-8">
         {PLANS.map((p) => (
-          <article key={p.key} className="relative card">
-            {p.badge && (
-              <div className="absolute -top-3 -right-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
-                {p.badge}
-              </div>
-            )}
-
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs text-black">
-              {p.pakke}
+          <div key={p.key} className={cls(
+            "rounded-2xl border p-5 bg-white",
+            selectedKey === p.key ? "border-emerald-400 shadow-lg" : "border-slate-200"
+          )}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold">{p.pakke}</h3>
+              {p.badge && <span className="bg-emerald-100 text-emerald-900 text-[10px] font-bold px-2 py-0.5 rounded-full">{p.badge}</span>}
             </div>
-
-            <p className="text-sm text-slate-600">{p.audience}</p>
-            <p className="mt-1 text-3xl font-extrabold text-emerald-700">{p.pris_pr_mdr} kr/md.</p>
-
-            <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 flex-1">
-              {p.features.map((f, i) => <li key={i}>{f}</li>)}
+            <div className="text-3xl font-extrabold text-emerald-700 mt-2">{p.pris_pr_mdr} kr<span className="text-sm font-normal text-slate-500"> / mdr</span></div>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700">
+              {p.features.map((f, i) => <li key={i}>• {f}</li>)}
             </ul>
-
-            <div className="card-footer">
-              <button
-                onClick={() => onChoosePlan(p.key)}
-                className="btn btn-primary mt-4 w-full text-center"
-              >
-                Vælg {p.pakke}
-              </button>
-            </div>
-          </article>
+            <button
+              className={cls("mt-4 w-full btn", selectedKey === p.key ? "btn-primary" : "btn-secondary")}
+              onClick={() => setSelectedKey(p.key)}
+            >
+              Vælg {p.pakke}
+            </button>
+          </div>
         ))}
       </section>
 
+      {/* Familie-tilpasning */}
+      {selectedKey === "familie" && (
+        <section className="mt-8 p-4 rounded-xl border bg-white">
+          <div className="text-sm text-slate-600 mb-1">Husstandsstørrelse</div>
+          <input type="number" min={FAMILY_BASE_SIZE} value={husstand} onChange={(e) => setHusstand(parseInt(e.target.value || "2", 10))}
+                 className="input" />
+          <div className="text-sm text-slate-600 mt-2">Pris beregnes automatisk: {prisMdr} kr / mdr</div>
+        </section>
+      )}
+
+      {/* Niveau / Køn */}
+      <section className="mt-8 grid md:grid-cols-2 gap-6">
+        <div className="p-4 rounded-xl border bg-white">
+          <div className="text-sm text-slate-600 mb-1">Niveau</div>
+          <select className="input" value={niveau} onChange={(e) => setNiveau(e.target.value)}>
+            <option>Begynder</option><option>Let øvet</option><option>Øvet</option>
+          </select>
+        </div>
+        <div className="p-4 rounded-xl border bg-white">
+          <div className="text-sm text-slate-600 mb-1">Køn</div>
+          <select className="input" value={koen} onChange={(e) => setKoen(e.target.value)}>
+            <option>Mand</option><option>Kvinde</option><option>Andet</option>
+          </select>
+        </div>
+      </section>
+
       {/* Formular */}
-      <section ref={formRef} className="mt-10">
-        <div className="section-header">
-          <div className="kicker">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Tilmelding
-          </div>
-          <h2 className="section-title">Pakke: {selectedPlan.pakke}</h2>
-          <div className="section-underline" />
-          <p className="section-subtitle">
-            Pris: <b>{prisMdr} kr/md</b> {selectedPlan.key === "familie" ? "(beregnet efter husstand)" : "(fast pris)"}
-          </p>
-        </div>
-
-        {/* Udvidelser: niveau + køn */}
-        <div className="grid sm:grid-cols-3 gap-3 my-4">
-          <div>
-            <label className="text-sm font-medium">Niveau</label>
-            <select className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={niveau} onChange={e=>setNiveau(e.target.value as any)}>
-              {NIVEAUER.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-sm font-medium block">Køn</label>
-            <div className="mt-1 inline-flex gap-2">
-              {KOEN.map(k => (
-                <button
-                  key={k}
-                  onClick={()=>setKoen(k)}
-                  type="button"
-                  className={`px-3 py-2 rounded-xl border text-sm ${koen===k ? "bg-emerald-600 text-white" : "hover:bg-gray-50"}`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Familie: husstand */}
-        {selectedPlan.key === "familie" && (
-          <div className="grid sm:grid-cols-3 gap-3 my-2">
-            <div>
-              <label className="text-sm font-medium">Husstand (antal personer)</label>
-              <select className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={husstand}
-                onChange={e=>setHusstand(parseInt(e.target.value,10))}
-              >
-                {[2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <p className="text-xs text-slate-500 mt-1">
-                Basepris dækker {FAMILY_BASE_SIZE}. +{FAMILY_EXTRA_PER_PERSON} kr/md pr. ekstra.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Kontaktfelter */}
-        <div className="grid gap-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">Navn</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" value={navn} onChange={e=>setNavn(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">E-mail</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" value={email} onChange={e=>setEmail(e.target.value)} />
-            </div>
+      <section className="mt-10 p-6 rounded-2xl border bg-white">
+        <h2 className="text-xl font-bold mb-4">Send indmeldelse</h2>
+        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <div className="text-sm text-slate-600">Valgt pakke</div>
+            <div className="font-semibold">{selectedPlan.pakke} — {prisMdr} kr / mdr</div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">Telefon (valgfri)</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" value={telefon} onChange={e=>setTelefon(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Fødselsår (valgfri)</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="YYYY" value={foedselsaar} onChange={e=>setFoedselsaar(e.target.value)} />
-            </div>
+          <input className="input" placeholder="Navn" value={navn} onChange={(e) => setNavn(e.target.value)} />
+          <input className="input" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="input" placeholder="Telefon" value={telefon} onChange={(e) => setTelefon(e.target.value)} />
+          <input className="input" placeholder="Adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} />
+          <input className="input" placeholder="Postnr/By" value={postnrBy} onChange={(e) => setPostnrBy(e.target.value)} />
+          <input className="input" placeholder="Fødselsår (valgfri)" value={foedselsaar} onChange={(e) => setFoedselsaar(e.target.value)} />
+          <textarea className="input md:col-span-2" placeholder="Bemærkning (valgfri)" value={note} onChange={(e) => setNote(e.target.value)} />
+
+          {msg && <div className="md:col-span-2 text-sm text-emerald-700">{msg}</div>}
+
+          <div className="md:col-span-2 flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className="px-5 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? "Sender…" : "Send indmeldelse"}
+            </button>
           </div>
-
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">Adresse (valgfri)</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" value={adresse} onChange={e=>setAdresse(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Postnr/By (valgfri)</label>
-              <input className="mt-1 w-full rounded-xl border px-3 py-2" value={postnrBy} onChange={e=>setPostnrBy(e.target.value)} />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Bemærkning (valgfri)</label>
-            <input className="mt-1 w-full rounded-xl border px-3 py-2" value={note} onChange={e=>setNote(e.target.value)} />
-          </div>
-        </div>
-
-        {/* Feedback */}
-        {msg && (
-          <p className={`mt-3 text-sm ${msg.startsWith("Tak!") ? "text-emerald-700" : "text-red-600"}`}>{msg}</p>
-        )}
-
-        {/* CTA */}
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={submit}
-            disabled={busy || !navn || !email}
-            className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? "Sender…" : "Send indmeldelse"}
-          </button>
-        </div>
+        </form>
       </section>
     </main>
   );
