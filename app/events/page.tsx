@@ -1,5 +1,6 @@
+/* [HELP:EVENTS:FILE] START — Forside for events (pladsholdere indtil admin/Sheet er koblet på) */
 export default function EventsPage() {
-  // Pladsholder-data – kan senere komme fra Google Sheets (Admin)
+  /* [HELP:EVENTS:DATA] START — Pladsholder-data (kan senere komme fra Google Sheets / Admin) */
   const events = [
     {
       id: "e1",
@@ -50,30 +51,35 @@ export default function EventsPage() {
       where: "Klublokalet",
     },
   ];
+  /* [HELP:EVENTS:DATA] END */
 
+  /* [HELP:EVENTS:RENDER] START — hele siderendering */
   return (
     <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10">
+      {/* [HELP:EVENTS:SECTION:HEADER] START — sideheader/beskrivelse */}
       <header className="mb-10">
-  <div className="rounded-3xl border border-lime-300/40 bg-white/60 backdrop-blur-sm p-6 shadow-sm">
-    <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs">
-      <span className="h-2 w-2 rounded-full bg-lime-500" />
-      🎯 EVENTS
-    </div>
+        <div className="rounded-3xl border border-lime-300/40 bg-white/60 backdrop-blur-sm p-6 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs">
+            <span className="h-2 w-2 rounded-full bg-lime-500" />
+            🎯 EVENTS
+          </div>
 
-    <h1 className="mt-3 text-3xl font-bold text-gray-900">
-      Humlum Dart Events
-    </h1>
+          <h1 className="mt-3 text-3xl font-bold text-gray-900">
+            Humlum Dart Events
+          </h1>
 
-    <p className="mt-2 text-gray-600 text-sm">
-      Turneringer, træning, hyggeaftener og lokale arrangementer.  
-      Kalenderen er aktiv snart – pladsholdere viser, hvad du kan glæde dig til!
-    </p>
-  </div>
-</header>
+          <p className="mt-2 text-gray-600 text-sm">
+            Turneringer, træning, hyggeaftener og lokale arrangementer.  
+            Kalenderen er aktiv snart – pladsholdere viser, hvad du kan glæde dig til!
+          </p>
+        </div>
+      </header>
+      {/* [HELP:EVENTS:SECTION:HEADER] END */}
 
-
+      {/* [HELP:EVENTS:GRID] START — kortgrid mappet over events */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
         {events.map(evt => (
+          /* [HELP:EVENTS:CARD] START — enkelt event-kort */
           <article
             key={evt.id}
             className="h-full flex flex-col rounded-3xl border border-lime-400 bg-white p-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
@@ -112,12 +118,18 @@ export default function EventsPage() {
               </button>
             </div>
           </article>
+          /* [HELP:EVENTS:CARD] END */
         ))}
       </section>
+      {/* [HELP:EVENTS:GRID] END */}
 
+      {/* [HELP:EVENTS:FOOTNOTE] START — note under grid */}
       <p className="mt-8 text-xs text-gray-500">
         Tip: Når vi kobler til admin, kan du filtrere pr. type (Træning / Turnering / Familie), vise billeder og aktivere “Tilmeld via formular”.
       </p>
+      {/* [HELP:EVENTS:FOOTNOTE] END */}
     </main>
   );
+  /* [HELP:EVENTS:RENDER] END */
 }
+/* [HELP:EVENTS:FILE] END */

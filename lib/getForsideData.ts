@@ -1,5 +1,8 @@
+/* [FORSIDE:DATA:IMPORTS] START */
+/* [FORSIDE:DATA:IMPORTS] END */
 // lib/getForsideData.ts
 
+/* [FORSIDE:DATA:TYPES] START */
 export type SheetItem = {
   id?: string;
   title?: string;
@@ -18,6 +21,7 @@ export type SheetItem = {
 };
 
 export type SheetMap = {
+/* [FORSIDE:DATA:TYPES] END */
   FORSIDE?: SheetItem[];
   NYHEDER?: SheetItem[];
   TICKER?: { message: string; title?: string; pin?: string; date?: string; order?: number; start_on?: string; end_on?: string; channel?: string }[];

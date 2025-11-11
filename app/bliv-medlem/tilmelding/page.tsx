@@ -1,14 +1,9 @@
+// app/bliv-medlem/tilmelding/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 
-type PakkeInfo = {
-  pakke?: string;
-  pris_pr_mdr?: string;
-  features?: string;
-  badge?: string;
-};
-
+type PakkeInfo = { pakke?: string; pris_pr_mdr?: string; features?: string; badge?: string; };
 type Form = {
   niveau: string;
   koen: "Mand" | "Kvinde" | "Andet";
@@ -24,23 +19,12 @@ type Form = {
 function clean(s: any) { return String(s ?? "").trim(); }
 
 export default function TilmeldingPage() {
-  console.info("HDK TILMELDING v3"); // versionsmarkør til at bekræfte at siden kører ny kode
-
   const [pakke, setPakke] = useState<string>("");
   const [info, setInfo] = useState<PakkeInfo | null>(null);
-
   const [f, setF] = useState<Form>({
-    niveau: "Hygge",
-    koen: "Mand",
-    navn: "",
-    email: "",
-    telefon: "",
-    foedselsaar: "",
-    adresse: "",
-    postnrBy: "",
-    note: "",
+    niveau: "Hygge", koen: "Mand", navn: "", email: "", telefon: "",
+    foedselsaar: "", adresse: "", postnrBy: "", note: "",
   });
-
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>("");
   const [ok, setOk] = useState<boolean>(false);
@@ -48,44 +32,35 @@ export default function TilmeldingPage() {
 
   const mobilepayLink = process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "";
 
-  // læs ?pakke= og pakkeinfo fra localStorage (HDK_PAKKER)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     const p = url.searchParams.get("pakke") || "";
     setPakke(p);
-
     try {
       const all = JSON.parse(localStorage.getItem("HDK_PAKKER") || "[]");
-      const found = Array.isArray(all)
-        ? (all.find((x: any) => clean(x.pakke) === p) as PakkeInfo | undefined)
-        : undefined;
+      const found = Array.isArray(all) ? (all.find((x: any) => clean(x.pakke) === p) as PakkeInfo | undefined) : undefined;
       setInfo(found || { pakke: p });
-    } catch {
-      setInfo({ pakke: p });
-    }
+    } catch { setInfo({ pakke: p }); }
   }, []);
 
-  const prisLabel = useMemo(() => {
-    return info?.pris_pr_mdr ? `${info.pris_pr_mdr} kr/md (fast pris)` : "";
-  }, [info]);
+  const prisLabel = useMemo(() => info?.pris_pr_mdr ? `${info.pris_pr_mdr} kr/md (fast pris)` : "", [info]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-
     if (!pakke) return setErr("Pakke mangler. Gå tilbage og vælg en pakke.");
     if (!f.navn) return setErr("Udfyld navn.");
     if (!f.email) return setErr("Udfyld e-mail.");
 
+    // >>> NØGLEPUNKTER: disse keys matcher JOIN-arkets overskrifter <<<
     const payload = {
-      // felter vores /api/join + Apps Script forventer
       name: f.navn,
       email: f.email,
       phone: f.telefon,
-      address: f.adresse,
-      zip_city: f.postnrBy,
-      birth_year: f.foedselsaar,
+      address: f.adresse,         // adresse -> address
+      zip_city: f.postnrBy,       // postnr/by -> zip_city
+      birth_year: f.foedselsaar,  // fødselsår -> birth_year
       package_id: pakke,
       notes: f.note,
       level: f.niveau,
@@ -100,31 +75,13 @@ export default function TilmeldingPage() {
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      // Robust parsing—ingen “Unexpected end of JSON input”
       const text = await res.text().catch(() => "");
-      let data: any = null;
-      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
-
-      if (!res.ok || !data?.ok) {
-        const msg = (data && (data.error || data.message)) || (text || `Serverfejl (HTTP ${res.status})`);
-        throw new Error(msg);
-      }
-
-      // reference hvis backend sender noget brugbart tilbage
-      const ref =
-        data?.result?.join_id ||
-        data?.result?.row ||
-        data?.result?.id ||
-        "";
-      setRefId(String(ref || ""));
-
-      setOk(true);
-    } catch (e: any) {
-      setErr(e?.message || "Noget gik galt. Prøv igen.");
-    } finally {
-      setBusy(false);
-    }
+      let data: any = null; try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+      if (!res.ok || !data?.ok) throw new Error((data && (data.error || data.message)) || (text || `Serverfejl (HTTP ${res.status})`));
+      const ref = data?.result?.join_id || data?.result?.row || data?.result?.id || "";
+      setRefId(String(ref || "")); setOk(true);
+    } catch (e: any) { setErr(e?.message || "Noget gik galt. Prøv igen."); }
+    finally { setBusy(false); }
   }
 
   if (ok) {
@@ -141,20 +98,14 @@ export default function TilmeldingPage() {
             {prisLabel ? <> · Pris: <span className="font-semibold">{prisLabel}</span></> : null}
             {refId ? <> · Reference: <span className="font-semibold">{refId}</span></> : null}
           </p>
-
           {mobilepayLink ? (
             <a href={mobilepayLink} className="mt-6 inline-block px-5 py-2 rounded-xl bg-black text-white hover:opacity-90">
               Betal kontingent med MobilePay
             </a>
           ) : (
-            <p className="mt-6 text-slate-700">
-              Betal i klubben (kontant eller MobilePay i baren). Medbring evt. din reference.
-            </p>
+            <p className="mt-6 text-slate-700">Betal i klubben (kontant eller MobilePay i baren).</p>
           )}
-
-          <div className="mt-6">
-            <a href="/bliv-medlem" className="text-emerald-700 underline">Tilbage til medlemsoversigt</a>
-          </div>
+          <div className="mt-6"><a href="/bliv-medlem" className="text-emerald-700 underline">Tilbage til medlemsoversigt</a></div>
         </div>
       </main>
     );
@@ -175,10 +126,7 @@ export default function TilmeldingPage() {
         <div>
           <label className="block text-sm text-slate-700 mb-1">Niveau</label>
           <select className="input" value={f.niveau} onChange={e => setF({ ...f, niveau: e.target.value as Form["niveau"] })}>
-            <option>Hygge</option>
-            <option>Begynder</option>
-            <option>Let øvet</option>
-            <option>Øvet</option>
+            <option>Hygge</option><option>Begynder</option><option>Let øvet</option><option>Øvet</option>
           </select>
         </div>
 
@@ -186,12 +134,9 @@ export default function TilmeldingPage() {
           <label className="block text-sm text-slate-700 mb-1">Køn</label>
           <div className="flex gap-2">
             {(["Mand","Kvinde","Andet"] as const).map(k => (
-              <button
-                key={k}
-                type="button"
+              <button key={k} type="button"
                 onClick={() => setF({ ...f, koen: k })}
-                className={`px-3 py-2 rounded-lg border ${f.koen===k ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-800 border-slate-300"}`}
-              >
+                className={`px-3 py-2 rounded-lg border ${f.koen===k ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-800 border-slate-300"}`}>
                 {k}
               </button>
             ))}

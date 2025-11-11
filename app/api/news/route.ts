@@ -1,36 +1,64 @@
-// app/api/news/route.ts
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+type SheetRow = Record<string, unknown>;
+type NewsItem = {
+  title: string;
+  teaser?: string;
+  link?: string;
+  image?: string;
+  order?: number;
+  visible?: string; // "YES"/"NO"
+};
+
+function asStr(v: unknown): string {
+  return (v ?? "").toString().trim();
+}
+function asNum(v: unknown): number | undefined {
+  const n = Number(asStr(v));
+  return Number.isFinite(n) ? n : undefined;
+}
 
 export async function GET() {
-  const base = process.env.NEXT_PUBLIC_SHEET_API;
-  if (!base) return NextResponse.json({ error: "Mangler NEXT_PUBLIC_SHEET_API" }, { status: 500 });
-
-  const url = `${base}?tab=NYHEDER`;
   try {
+    const endpoint = process.env.NEXT_PUBLIC_SHEET_API;
+    if (!endpoint) {
+      return NextResponse.json(
+        { ok: false, error: "Missing NEXT_PUBLIC_SHEET_API" },
+        { status: 500 }
+      );
+    }
+
+    const url = `${endpoint}?tab=NYHEDER`;
     const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
+    if (!res.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Fetch failed: ${res.status}` },
+        { status: 502 }
+      );
+    }
 
-    const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data?.items) ? data.items : []);
-    const items = rows
-      .map((r: any) => ({
-        id: r?.id ?? undefined,
-        title: r?.title ?? r?.overskrift ?? "",
-        body: r?.body ?? r?.tekst ?? "",
-        body_md: r?.body_md ?? "",
-        status: r?.status ?? "",
-        visible: r?.visible ?? "",
-        order: Number(r?.order ?? 0),
-        channel: r?.channel ?? "",
-        link: r?.link ?? "",
-        date: r?.date ?? ""
-      }))
-      .filter((r: any) => (r.visible || "").toString().toUpperCase() !== "NO")
-      .sort((a: any, b: any) => a.order - b.order);
+    const data = (await res.json()) as { items?: SheetRow[] };
+    const all: NewsItem[] = Array.isArray(data.items)
+      ? data.items.map((r: SheetRow): NewsItem => ({
+          title: asStr((r as any).title),
+          teaser: asStr((r as any).teaser),
+          link: asStr((r as any).link),
+          image: asStr((r as any).image) || undefined,
+          order: asNum((r as any).order),
+          visible: asStr((r as any).visible),
+        }))
+      : [];
 
-    return NextResponse.json({ items });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Serverfejl" }, { status: 502 });
+    const items: NewsItem[] = all
+      .filter((x: NewsItem) => asStr(x.title) !== "")
+      .filter((x: NewsItem) => asStr(x.visible).toUpperCase() !== "NO")
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    return NextResponse.json({ ok: true, items }, { status: 200 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { ok: false, error: (err as Error).message ?? "Unknown error" },
+      { status: 500 }
+    );
   }
 }

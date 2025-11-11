@@ -1,29 +1,28 @@
 import { NextResponse } from "next/server";
-export const revalidate = 0;
+import { promises as fs } from "fs";
+import path from "path";
 
-function toRows(d:any){ return Array.isArray(d) ? d : (d?.rows ?? d?.data ?? []); }
+export const revalidate = 10;
 
 export async function GET() {
-  const base = process.env.NEXT_PUBLIC_SHEET_API;
-  if (!base) return NextResponse.json({ error: "Missing NEXT_PUBLIC_SHEET_API" }, { status: 500 });
+  try {
+    const dir = path.join(process.cwd(), "public", "images", "hero", "active");
+    const entries = await fs.readdir(dir, { withFileTypes: true });
 
-  const res = await fetch(`${base}?tab=HERO`, { cache: "no-store" });
-  if (!res.ok) return NextResponse.json({ error: "Upstream "+res.status }, { status: 502 });
+    const allowed = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+    const files = entries
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .filter((name) => allowed.has(path.extname(name).toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  const rows = toRows(await res.json());
-  const items = rows
-    .filter((r:any)=>String(r.visible||"").toUpperCase()==="YES")
-    .map((r:any)=>({
-      url: String(r.url||"").trim(),
-      headline: r.headline ?? "",
-      subline: r.subline ?? "",
-      overlay: r.overlay ?? "dark",
-      link_url: r.link_url ?? "",
-      order: Number(r.order ?? 9999),
-      ticker: String(r.ticker_visible||"").toUpperCase()==="YES" ? (r.ticker_msg ?? "") : ""
-    }))
-    .filter((x:any)=>x.url)
-    .sort((a:any,b:any)=>(a.order??9999)-(b.order??9999));
+    const items = files.map((name) => ({
+      url: `/images/hero/active/${name}`,
+      alt: name,
+    }));
 
-  return NextResponse.json({ items });
+    return NextResponse.json({ items }, { status: 200 });
+  } catch {
+    return NextResponse.json({ items: [] }, { status: 200 });
+  }
 }

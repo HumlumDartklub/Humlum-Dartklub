@@ -1,13 +1,15 @@
 "use client";
 
+/* [HELP:ABOUT:IMPORTS] START */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+/* [HELP:ABOUT:IMPORTS] END */
 
-/* —————————————————————————
-   Typer & data
-————————————————————————— */
+/* [HELP:ABOUT:TYPES] START — typer & strukturer */
 type Member = { role: string; name: string; email?: string; phone?: string };
+/* [HELP:ABOUT:TYPES] END */
 
+/* [HELP:ABOUT:VALUES] START — klubværdier (liste) */
 const VALUES = [
   { title: "Fællesskab", text: "alle skal kunne være med og føle sig velkomne." },
   { title: "Præcision",  text: "vi træner klogt, måler fremskridt og deler læring." },
@@ -15,7 +17,9 @@ const VALUES = [
   { title: "Udvikling",  text: "små skridt, store resultater over tid." },
   { title: "Glæde",      text: "vi tager spillet seriøst, men os selv med et smil." },
 ];
+/* [HELP:ABOUT:VALUES] END */
 
+/* [HELP:ABOUT:BOARD] START — bestyrelsesliste (offentlig oversigt) */
 const BOARD: Member[] = [
   { role: "Formand",          name: "[Navn]", email: "mail@example.dk", phone: "+45 xx xx xx xx" },
   { role: "Næstformand",      name: "[Navn]", email: "mail@example.dk", phone: "+45 xx xx xx xx" },
@@ -23,11 +27,9 @@ const BOARD: Member[] = [
   { role: "Bestyrelsesmedlem",name: "[Navn]", email: "mail@example.dk", phone: "+45 xx xx xx xx" },
   { role: "Suppleant",        name: "[Navn]", email: "mail@example.dk", phone: "+45 xx xx xx xx" },
 ];
+/* [HELP:ABOUT:BOARD] END */
 
-/* —————————————————————————
-   Prøvetrænings-slots
-   - Konfigurerbar: træningsdage/tider + interval (1=ugentligt, 2=hver 14.dag)
-————————————————————————— */
+/* [HELP:ABOUT:TRAIN:CONFIG] START — træningsregler (prøvetræning slots) */
 type Rule = { weekday: number; timeHHMM: string }; // 0=søn … 6=lør
 
 const TRAIN_RULES: Rule[] = [
@@ -37,7 +39,9 @@ const TRAIN_RULES: Rule[] = [
 ];
 
 const INTERVAL_WEEKS = 1; // sæt til 2 for hver 14. dag
+/* [HELP:ABOUT:TRAIN:CONFIG] END */
 
+/* [HELP:ABOUT:UTIL:nextSlots] START — beregn næste slots */
 function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
   const out: { date: Date; isoDate: string; time: string; label: string }[] = [];
   const now = new Date();
@@ -64,18 +68,18 @@ function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
   }
   return out.sort((a,b)=>a.date.getTime()-b.date.getTime());
 }
+/* [HELP:ABOUT:UTIL:nextSlots] END */
 
-/* —————————————————————————
-   Komponent
-————————————————————————— */
+/* [HELP:ABOUT:COMPONENT] START — hovedkomponent */
 export default function AboutPage() {
-  // Smooth scroll
+  /* [HELP:ABOUT:HANDLERS:NAV] START — smooth scroll helper */
   const go = useCallback((id: string) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+  /* [HELP:ABOUT:HANDLERS:NAV] END */
 
-  // Prøvetræning modal state
+  /* [HELP:ABOUT:STATE] START — modal/valg/form state */
   const [showBooking, setShowBooking] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
@@ -85,17 +89,22 @@ export default function AboutPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  /* [HELP:ABOUT:STATE] END */
 
+  /* [HELP:ABOUT:SLOTS:COMPUTE] START — forudberegn mulige tider */
   const slots = useMemo(() => nextSlots(TRAIN_RULES, 24, INTERVAL_WEEKS), []);
+  /* [HELP:ABOUT:SLOTS:COMPUTE] END */
 
-  // Når modal åbnes, for-vælg første slot automatisk
+  /* [HELP:ABOUT:EFFECTS:PRESELECT] START — forvælg første slot ved åbning */
   useEffect(() => {
     if (showBooking && slots.length > 0) {
       setSelectedDate(slots[0].isoDate);
       setSelectedTime(slots[0].time);
     }
   }, [showBooking, slots]);
+  /* [HELP:ABOUT:EFFECTS:PRESELECT] END */
 
+  /* [HELP:ABOUT:HANDLERS:SUBMIT] START — send “Book prøvetræning” */
   async function submitBooking() {
     setMsg(null);
     if (!name || !email || !selectedDate || !selectedTime) {
@@ -138,10 +147,12 @@ export default function AboutPage() {
       setBusy(false);
     }
   }
+  /* [HELP:ABOUT:HANDLERS:SUBMIT] END */
 
+  /* [HELP:ABOUT:RENDER] START — hele siderendering */
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-      {/* Sticky quick-bar */}
+      {/* [HELP:ABOUT:TOP:QUICKBAR] START — sticky quick-bar */}
       <div className="mb-4 sticky top-2 z-20 flex flex-wrap gap-2 bg-white/80 backdrop-blur-sm p-2 rounded-xl border">
         <button onClick={() => setShowBooking(true)} className="px-3 py-1.5 rounded-xl bg-black text-white hover:opacity-90">
           🎯 Book prøvetræning
@@ -161,8 +172,9 @@ export default function AboutPage() {
           🤝 Kontakt
         </button>
       </div>
+      {/* [HELP:ABOUT:TOP:QUICKBAR] END */}
 
-      {/* INTRO */}
+      {/* [HELP:ABOUT:INTRO] START — intro/overskrift/mini-TOC */}
       <section className="section-header">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -176,7 +188,7 @@ export default function AboutPage() {
           interne events og kammeratligt pres. Fokus: fællesskab, udvikling og gode rammer.
         </p>
 
-        {/* Mini-TOC */}
+        {/* [HELP:ABOUT:INTRO:TOC] START — mini-TOC */}
         <nav className="mt-3 text-sm text-emerald-800 flex flex-wrap gap-x-4 gap-y-1">
           <button onClick={() => setShowBooking(true)} className="underline hover:no-underline">Træning</button>
           <button onClick={() => go("vedtaegter")} className="underline hover:no-underline">Vedtægter</button>
@@ -187,11 +199,13 @@ export default function AboutPage() {
           <button onClick={() => go("find-os")} className="underline hover:no-underline">Find os</button>
           <button onClick={() => go("kontakt")} className="underline hover:no-underline">Kontakt</button>
         </nav>
+        {/* [HELP:ABOUT:INTRO:TOC] END */}
       </section>
+      {/* [HELP:ABOUT:INTRO] END */}
 
-      {/* GRID 1/2/3 – kompakt dashboard */}
+      {/* [HELP:ABOUT:GRID] START — dashboard-sektioner */}
       <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* VEDTÆGTER */}
+        {/* [HELP:ABOUT:SEC:VEDTAEGTER] START */}
         <section id="vedtaegter" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -239,8 +253,9 @@ export default function AboutPage() {
             </details>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:VEDTAEGTER] END */}
 
-        {/* HOLD & RÆKKER */}
+        {/* [HELP:ABOUT:SEC:HOLD] START */}
         <section id="hold" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -269,8 +284,9 @@ export default function AboutPage() {
             </div>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:HOLD] END */}
 
-        {/* VÆRDIER */}
+        {/* [HELP:ABOUT:SEC:VAERDIER] START */}
         <section id="vaerdier" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -291,8 +307,9 @@ export default function AboutPage() {
             </ul>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:VAERDIER] END */}
 
-        {/* BESTYRELSE */}
+        {/* [HELP:ABOUT:SEC:BOARD] START */}
         <section id="bestyrelse" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -338,8 +355,9 @@ export default function AboutPage() {
             </div>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:BOARD] END */}
 
-        {/* DOKUMENTER */}
+        {/* [HELP:ABOUT:SEC:DOCS] START */}
         <section id="dokumenter" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -358,8 +376,9 @@ export default function AboutPage() {
             </ul>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:DOCS] END */}
 
-        {/* FIND OS */}
+        {/* [HELP:ABOUT:SEC:MAP] START */}
         <section id="find-os" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -396,8 +415,9 @@ export default function AboutPage() {
             </dl>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:MAP] END */}
 
-        {/* KONTAKT – én samlet (top-bar scroller hertil) */}
+        {/* [HELP:ABOUT:SEC:CONTACT] START */}
         <section id="kontakt" className="card h-full min-h-[84px] md:col-span-2 lg:col-span-3">
           <details className="group" open>
             <summary className="cursor-pointer list-none">
@@ -436,11 +456,11 @@ export default function AboutPage() {
             </div>
           </details>
         </section>
+        {/* [HELP:ABOUT:SEC:CONTACT] END */}
       </section>
+      {/* [HELP:ABOUT:GRID] END */}
 
-      {/* —————————————————————————
-          MODAL: Book prøvetræning (ONE-LINER slots)
-      ————————————————————————— */}
+      {/* [HELP:ABOUT:MODAL] START — modal: Book prøvetræning */}
       {showBooking && (
         <div className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm flex items-start justify-center p-4" onClick={() => setShowBooking(false)}>
           <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl border" onClick={(e)=>e.stopPropagation()}>
@@ -449,7 +469,7 @@ export default function AboutPage() {
               <button className="px-2 py-1 rounded-lg border hover:bg-gray-50" onClick={()=>setShowBooking(false)}>Luk</button>
             </div>
 
-            {/* One-liner slots */}
+            {/* [HELP:ABOUT:MODAL:SLOTS] START — one-liner slots */}
             <div>
               <div className="kicker mb-2">
                 <span className="h-2 w-2 rounded-full bg-lime-500" /> Vælg dato & tid
@@ -469,8 +489,9 @@ export default function AboutPage() {
                 })}
               </div>
             </div>
+            {/* [HELP:ABOUT:MODAL:SLOTS] END */}
 
-            {/* Formular */}
+            {/* [HELP:ABOUT:MODAL:FORM] START — formularfelter */}
             <div className="mt-4 grid md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium">Navn</label>
@@ -489,6 +510,7 @@ export default function AboutPage() {
                 <input className="mt-1 w-full rounded-xl border px-3 py-2" value={note} onChange={e=>setNote(e.target.value)} />
               </div>
             </div>
+            {/* [HELP:ABOUT:MODAL:FORM] END */}
 
             {msg && (
               <p className={`mt-3 text-sm ${msg.includes("Tak!") ? "text-emerald-700" : "text-red-600"}`}>
@@ -496,6 +518,7 @@ export default function AboutPage() {
               </p>
             )}
 
+            {/* [HELP:ABOUT:MODAL:CTA] START — knapper */}
             <div className="mt-4 flex justify-end gap-2">
               <button className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50" onClick={()=>setShowBooking(false)}>Annullér</button>
               <button
@@ -506,6 +529,7 @@ export default function AboutPage() {
                 {busy ? "Gemmer…" : "Book gratis prøvetræning"}
               </button>
             </div>
+            {/* [HELP:ABOUT:MODAL:CTA] END */}
 
             <p className="mt-2 text-xs text-gray-600">
               Gratis og uforpligtende. Vi bekræfter på e-mail. (Ændr frekvens i koden ved <code>INTERVAL_WEEKS</code>.)
@@ -513,6 +537,9 @@ export default function AboutPage() {
           </div>
         </div>
       )}
+      {/* [HELP:ABOUT:MODAL] END */}
     </main>
   );
+  /* [HELP:ABOUT:RENDER] END */
 }
+/* [HELP:ABOUT:COMPONENT] END */

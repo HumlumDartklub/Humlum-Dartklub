@@ -1,101 +1,59 @@
 // app/api/join/route.ts
-// Robust JOIN-endpoint der sender til Google Apps Script og returnerer stabil JSON
+import { NextRequest, NextResponse } from "next/server";
 
-import { NextResponse } from "next/server";
-
-export const revalidate = 0;              // ingen caching
-export const dynamic = "force-dynamic";   // tvangsdynamik (Next 13+/16)
-
-function getWebhook(): string {
-  return (
-    process.env.JOIN_WEBHOOK ||
-    process.env.SHEET_API_URL ||
-    process.env.NEXT_PUBLIC_SHEET_API ||
-    ""
-  ).trim();
-}
-
-function tryParseJSON(text: string) {
-  try { return JSON.parse(text); } catch { return null; }
-}
-
-export async function POST(req: Request) {
-  const webhook = getWebhook();
-  if (!webhook) {
-    return NextResponse.json(
-      { ok: false, error: "JOIN_WEBHOOK (eller fallback) mangler i .env.local" },
-      { status: 500 }
-    );
-  }
-
-  // Læs payload fra frontend (må gerne være tom)
-  let incoming: any = {};
-  try { incoming = await req.json(); } catch { incoming = {}; }
-
-  // Payload til Apps Script (matcher doPost → { tab, data })
-  const body = JSON.stringify({ tab: "JOIN", data: incoming });
-
-  // Timeout-sikring
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000); // 15 sek.
-
+export async function POST(req: NextRequest) {
   try {
-    const res = await fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      signal: controller.signal,
-    });
+    const body = await req.json().catch(() => ({}));
 
-    clearTimeout(timer);
+    const SHEET_API_URL = process.env.SHEET_API_URL!;
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN!;
 
-    const text = await res.text().catch(() => "");
-    const data = tryParseJSON(text);
-
-    // Hvis Apps Script ikke er public, kan det returnere HTML-login
-    if (text && text.trim().startsWith("<")) {
+    if (!SHEET_API_URL || !ADMIN_TOKEN) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Apps Script returnerede HTML. Tjek Web App-deploy: Execute as 'Me' + Access 'Anyone with the link'.",
-        },
-        { status: 502 }
+        { ok: false, error: "Missing SHEET_API_URL or ADMIN_TOKEN" },
+        { status: 500 }
       );
     }
 
-    if (!res.ok) {
-      const msg =
-        (data && (data.error || data.message)) ||
-        text ||
-        `Upstream-fejl (HTTP ${res.status})`;
-      return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+    // Send til vores Web App som JOIN-aktion på fanen INDMELDINGER
+    const url = new URL(SHEET_API_URL);
+    url.searchParams.set("tab", "INDMELDINGER");
+    url.searchParams.set("action", "join");
+    url.searchParams.set("key", ADMIN_TOKEN);
+
+    const upstream = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      redirect: "follow",
+      cache: "no-store",
+    });
+
+    const text = await upstream.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch {}
+
+    if (!upstream.ok || !data || data.ok !== true) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Upstream not JSON",
+          debug: {
+            status: upstream.status,
+            url: url.toString(),
+            contentType: upstream.headers.get("content-type"),
+            snippet: text.slice(0, 600),
+          },
+        },
+        { status: 500 }
+      );
     }
 
-    // Normalisér svar til { ok: true, result: ... }
-    if (data && typeof data === "object") {
-      const ok = Object.prototype.hasOwnProperty.call(data, "ok")
-        ? Boolean((data as any).ok)
-        : true;
-      return NextResponse.json({ ok, result: data }, { status: 200 });
-    }
-
-    // OK status men ikke-JSON svar → pak ind
-    return NextResponse.json({ ok: true, result: text || null }, { status: 200 });
+    return NextResponse.json(data);
   } catch (err: any) {
-    clearTimeout(timer);
-    const msg = String(err?.message || err || "Ukendt fejl");
-    const status = /aborted/i.test(msg) ? 504 : 500;
-    return NextResponse.json({ ok: false, error: msg }, { status });
+    return NextResponse.json(
+      { ok: false, error: err?.message || "Server error" },
+      { status: 500 }
+    );
   }
-}
-
-export async function GET() {
-  // Lille sundhedstjek
-  const hasEnv = !!getWebhook();
-  return NextResponse.json({
-    ok: true,
-    info: "JOIN endpoint. Brug POST.",
-    webhook: hasEnv ? "ok" : "missing",
-  });
 }

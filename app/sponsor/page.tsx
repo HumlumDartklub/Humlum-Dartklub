@@ -1,16 +1,25 @@
 "use client";
 
+/* [HELP:SPONSOR:IMPORTS] START
+ * Pitch: Importer brugt af sponsorsiden. Tilføj her hvis du får brug for mere.
+ * [HELP:SPONSOR:IMPORTS] END */
 import { useMemo, useState } from "react";
 
-/* ======================================
-   Konstanter & typer
-   ====================================== */
+/* [HELP:SPONSOR:CONFIG] START
+ * Pitch: Grundkonstanter og links du kan tilpasse uden at røre UI.
+ * [HELP:SPONSOR:CONFIG] END */
+/* [HELP:SPONSOR:CONFIG:LIMITS] START — Min/max for ét-klik beløb */
 const CLICK_MIN = 25;
 const CLICK_MAX = 100_000;
+/* [HELP:SPONSOR:CONFIG:LIMITS] END */
 
-/** Skift dette til din rigtige formular-URL hvis den er ekstern (Google Form el.lign.) */
+/* [HELP:SPONSOR:FORM:LINK] START — URL til sponsor-tilmeldingsskema */
 const SPONSOR_FORM_HREF = "/sponsor/tilmelding"; // <- juster hvis du har en anden sti
+/* [HELP:SPONSOR:FORM:LINK] END */
 
+/* [HELP:SPONSOR:TYPES] START
+ * Pitch: Typer til pakker og tilkøb.
+ * [HELP:SPONSOR:TYPES] END */
 type PackageKey = "bronze" | "silver" | "gold";
 type Package = {
   key: PackageKey;
@@ -32,10 +41,12 @@ type AddOn = {
   hint?: string;
 };
 
-/* ======================================
-   Data (pakker & tilkøb)
-   ====================================== */
+/* [HELP:SPONSOR:PACKAGES:DATA] START
+ * Pitch: Sponsor-pakker. Ret navn/ikon/pris/features her.
+ * Brug under-ankrene hvis du kun ændrer én pakke.
+ * [HELP:SPONSOR:PACKAGES:DATA] END */
 const PACKAGES: Package[] = [
+  /* [HELP:SPONSOR:PACKAGES:BRONZE] START — Bronze */
   {
     key: "bronze",
     name: "Bronze",
@@ -47,6 +58,9 @@ const PACKAGES: Package[] = [
       "Klubcertifikat til butik/kontor",
     ],
   },
+  /* [HELP:SPONSOR:PACKAGES:BRONZE] END */
+
+  /* [HELP:SPONSOR:PACKAGES:SILVER] START — Sølv */
   {
     key: "silver",
     name: "Sølv",
@@ -60,6 +74,9 @@ const PACKAGES: Package[] = [
       "Tak i SoMe 2× årligt",
     ],
   },
+  /* [HELP:SPONSOR:PACKAGES:SILVER] END */
+
+  /* [HELP:SPONSOR:PACKAGES:GOLD] START — Guld */
   {
     key: "gold",
     name: "Guld",
@@ -72,9 +89,14 @@ const PACKAGES: Package[] = [
       "Profil på sponsorvæg + link",
     ],
   },
+  /* [HELP:SPONSOR:PACKAGES:GOLD] END */
 ];
 
+/* [HELP:SPONSOR:ADDONS:DATA] START
+ * Pitch: Tilkøb. Ret navn/ikon/priser/hint her.
+ * [HELP:SPONSOR:ADDONS:DATA] END */
 const ADDONS: AddOn[] = [
+  /* [HELP:SPONSOR:ADDONS:YOUTH] START — Youth sponsor */
   {
     key: "youth",
     name: "Youth sponsor",
@@ -82,6 +104,9 @@ const ADDONS: AddOn[] = [
     monthly: 50,
     hint: "Hjælp unge spillere med træning & udstyr",
   },
+  /* [HELP:SPONSOR:ADDONS:YOUTH] END */
+
+  /* [HELP:SPONSOR:ADDONS:EVENTS] START — Event sponsor */
   {
     key: "events",
     name: "Event sponsor",
@@ -89,6 +114,9 @@ const ADDONS: AddOn[] = [
     yearly: 1000,
     hint: "Synlighed ved klubarrangementer",
   },
+  /* [HELP:SPONSOR:ADDONS:EVENTS] END */
+
+  /* [HELP:SPONSOR:ADDONS:GEAR] START — Udstyr sponsor */
   {
     key: "gear",
     name: "Udstyr sponsor",
@@ -96,11 +124,12 @@ const ADDONS: AddOn[] = [
     yearly: 1500,
     hint: "Bidrag til tavler, stativer og materialer",
   },
+  /* [HELP:SPONSOR:ADDONS:GEAR] END */
 ];
 
-/* ======================================
-   Utils
-   ====================================== */
+/* [HELP:SPONSOR:UTILS] START
+ * Pitch: Små hjælpefunktioner og formattering.
+ * [HELP:SPONSOR:UTILS] END */
 const fmt = new Intl.NumberFormat("da-DK", {
   style: "currency",
   currency: "DKK",
@@ -108,28 +137,37 @@ const fmt = new Intl.NumberFormat("da-DK", {
 });
 const fmt0 = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 0 });
 
+/* [HELP:SPONSOR:UTILS:CLAMP] START — begræns tal mellem min/max */
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(n, max));
+/* [HELP:SPONSOR:UTILS:CLAMP] END */
 
+/* [HELP:SPONSOR:UTILS:ADDON-LABEL] START — prislabel for tilkøb */
 function addonPriceLabel(a: AddOn) {
   if (a.monthly) return `${fmt.format(a.monthly)}/md.`;
   if (a.yearly) return `${fmt.format(a.yearly)}/år`;
   return "";
 }
+/* [HELP:SPONSOR:UTILS:ADDON-LABEL] END */
 
 /* ======================================
    Komponent
    ====================================== */
+/* [HELP:SPONSOR:COMPONENT] START
+ * Pitch: Selve siden — state, beregninger og JSX-sektioner.
+ * [HELP:SPONSOR:COMPONENT] END */
 export default function SponsorPage() {
-  /* Pakkevalg (kan nu toggles FRA ved klik på valgt pakke) */
+  /* [HELP:SPONSOR:STATE:PACKAGE] START — valgt pakke (klik igen for at fjerne) */
   const [selected, setSelected] = useState<PackageKey | null>(null);
+  /* [HELP:SPONSOR:STATE:PACKAGE] END */
 
-  /* Ét-klik støtte */
+  /* [HELP:SPONSOR:STATE:ONECLICK] START — ét-klik støtte (beløb + aktiv) */
   const [clickActive, setClickActive] = useState(false);
   const [clickAmount, setClickAmount] = useState<number>(500);
   const quick = [50, 100, 200, 500, 1000];
+  /* [HELP:SPONSOR:STATE:ONECLICK] END */
 
-  /* Øremærkning */
+  /* [HELP:SPONSOR:STATE:EARMARK] START — øremærkning + anonym toggle */
   const [clickAnon, setClickAnon] = useState(false);
   const [tags, setTags] = useState({
     dartskive: true,
@@ -140,8 +178,9 @@ export default function SponsorPage() {
   });
   const toggleTag = (k: keyof typeof tags) =>
     setTags((t) => ({ ...t, [k]: !t[k] }));
+  /* [HELP:SPONSOR:STATE:EARMARK] END */
 
-  /* Tilkøb (toggle) */
+  /* [HELP:SPONSOR:STATE:ADDONS] START — valgte tilkøb (toggle) */
   const [selectedAddOns, setSelectedAddOns] = useState<Record<AddOnKey, boolean>>({
     youth: false,
     events: false,
@@ -149,13 +188,16 @@ export default function SponsorPage() {
   });
   const toggleAddon = (k: AddOnKey) =>
     setSelectedAddOns((s) => ({ ...s, [k]: !s[k] }));
+  /* [HELP:SPONSOR:STATE:ADDONS] END */
 
-  /* Summering */
+  /* [HELP:SPONSOR:COMPUTE:BASE] START — pris for valgt pakke */
   const baseYear = useMemo(() => {
     const p = PACKAGES.find((x) => x.key === selected);
     return p ? p.priceYear : 0;
   }, [selected]);
+  /* [HELP:SPONSOR:COMPUTE:BASE] END */
 
+  /* [HELP:SPONSOR:COMPUTE:ADDONS] START — tilkøbspriser (pr. år & pr. måned) */
   const addOnsYear = useMemo(() => {
     let y = 0;
     ADDONS.forEach((a) => {
@@ -171,20 +213,29 @@ export default function SponsorPage() {
     });
     return m;
   }, [selectedAddOns]);
+  /* [HELP:SPONSOR:COMPUTE:ADDONS] END */
 
+  /* [HELP:SPONSOR:COMPUTE:ONECLICK] START — ét-klik total (begrænset af min/max) */
   const oneClick = clickActive ? clamp(clickAmount, CLICK_MIN, CLICK_MAX) : 0;
+  /* [HELP:SPONSOR:COMPUTE:ONECLICK] END */
 
+  /* [HELP:SPONSOR:COMPUTE:TOTALS] START — samlet pris pr. år og måned */
   const totalYear = baseYear + addOnsYear + addOnsMonth * 12 + oneClick;
   const totalMonth = Math.round(totalYear / 12);
+  /* [HELP:SPONSOR:COMPUTE:TOTALS] END */
 
+  /* [HELP:SPONSOR:COMPUTE:EARMARK] START — liste over valgte øremærkninger */
   const earmarkList = Object.entries(tags)
     .filter(([, v]) => v)
     .map(([k]) => k);
+  /* [HELP:SPONSOR:COMPUTE:EARMARK] END */
 
+  /* [HELP:SPONSOR:COMPUTE:READY] START — er noget valgt? (kan bruges til CTA) */
   const anyAddon = useMemo(() => Object.values(selectedAddOns).some(Boolean), [selectedAddOns]);
   const readyForForm = Boolean(selected || clickActive || anyAddon);
+  /* [HELP:SPONSOR:COMPUTE:READY] END */
 
-  /* Udskrift / kopi / mail */
+  /* [HELP:SPONSOR:SUMMARY:BUILD] START — generér tekstopsummering til print/kopi/mail */
   const buildSummaryText = () => {
     const p = PACKAGES.find((x) => x.key === selected);
     const lines: string[] = [];
@@ -212,7 +263,9 @@ export default function SponsorPage() {
     lines.push(`Ca. pr. måned:  ${fmt.format(totalMonth)}`);
     return lines.join("\n");
   };
+  /* [HELP:SPONSOR:SUMMARY:BUILD] END */
 
+  /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — print / kopiér / mail knappernes logik */
   const handlePrint = () => {
     const w = window.open("", "_blank", "noopener,noreferrer,width=800,height=900");
     if (!w) return;
@@ -235,13 +288,14 @@ export default function SponsorPage() {
     const body = encodeURIComponent(buildSummaryText());
     window.location.href = `mailto:?subject=Sponsoropsummering%20-%20Humlum%20Dartklub&body=${body}`;
   };
+  /* [HELP:SPONSOR:SUMMARY:ACTIONS] END */
 
   /* ======================================
      UI
      ====================================== */
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      {/* Intro */}
+      {/* [HELP:SPONSOR:SECTION:INTRO] START — sideintro (kicker, titel, undertekst) */}
       <section className="section-header">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -253,8 +307,9 @@ export default function SponsorPage() {
           Vælg en pakke og/eller støt med et valgfrit beløb. Opsummeringen kan printes, kopieres eller sendes som e-mail.
         </p>
       </section>
+      {/* [HELP:SPONSOR:SECTION:INTRO] END */}
 
-      {/* Pakker + ét-klik */}
+      {/* [HELP:SPONSOR:SECTION:PACKAGES] START — pakker + ét-klik støtte i samme grid */}
       <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -303,7 +358,7 @@ export default function SponsorPage() {
             );
           })}
 
-          {/* Støt med ét klik */}
+          {/* [HELP:SPONSOR:ONECLICK] START — kortet “Støt med ét klik” */}
           <div
             className={[
               "h-full text-left rounded-3xl border p-6 shadow-md transition",
@@ -391,10 +446,12 @@ export default function SponsorPage() {
               {clickActive ? "Fjern støtte" : "Tilføj støtte"}
             </button>
           </div>
+          {/* [HELP:SPONSOR:ONECLICK] END */}
         </div>
       </section>
+      {/* [HELP:SPONSOR:SECTION:PACKAGES] END */}
 
-      {/* Tilkøb */}
+      {/* [HELP:SPONSOR:SECTION:ADDONS] START — tilkøbsgrid */}
       <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -430,8 +487,9 @@ export default function SponsorPage() {
           })}
         </div>
       </section>
+      {/* [HELP:SPONSOR:SECTION:ADDONS] END */}
 
-      {/* Opsummering */}
+      {/* [HELP:SPONSOR:SECTION:SUMMARY] START — opsummering + handlinger */}
       <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -439,6 +497,7 @@ export default function SponsorPage() {
         </div>
 
         <div className="mt-3 grid gap-4 md:grid-cols-2">
+          {/* [HELP:SPONSOR:SUMMARY:LEFT] START — talboks (pakke/tilkøb/engang) */}
           <div className="rounded-xl border border-lime-300/60 bg-lime-50 p-4 text-sm">
             <dl className="space-y-2">
               <div className="flex justify-between">
@@ -465,7 +524,9 @@ export default function SponsorPage() {
               </div>
             </dl>
           </div>
+          {/* [HELP:SPONSOR:SUMMARY:LEFT] END */}
 
+          {/* [HELP:SPONSOR:SUMMARY:RIGHT] START — total + knapper */}
           <div className="rounded-xl border border-lime-300/60 bg-white p-4">
             <p className="text-lg">I alt pr. år</p>
             <p className="text-3xl font-extrabold text-gray-900">{fmt.format(totalYear)}</p>
@@ -479,8 +540,10 @@ export default function SponsorPage() {
               <a href={SPONSOR_FORM_HREF} className="btn btn-primary">Udfyld sponsor-skema</a>
             </div>
           </div>
+          {/* [HELP:SPONSOR:SUMMARY:RIGHT] END */}
         </div>
       </section>
+      {/* [HELP:SPONSOR:SECTION:SUMMARY] END */}
     </main>
   );
 }

@@ -1,5 +1,9 @@
+/* [SHEET:FETCH:IMPORTS] START */
+/* [SHEET:FETCH:IMPORTS] END */
 // lib/fetchSheet.ts
+/* [SHEET:FETCH:TYPES] START */
 export type AnyRow = Record<string, any>;
+/* [SHEET:FETCH:TYPES] END */
 
 export async function fetchSheet(tab: string): Promise<AnyRow[]> {
   const name = String(tab || "").trim();
