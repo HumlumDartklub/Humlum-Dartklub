@@ -1,64 +1,88 @@
-import { NextResponse } from "next/server";
+/* [HELP:API:NEWS] START — læs fra data/news.json + billeder i /public/news */
 
-type SheetRow = Record<string, unknown>;
-type NewsItem = {
-  title: string;
+import { NextResponse } from "next/server";
+import { readFile } from "fs/promises";
+import path from "path";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+type RawItem = {
+  title?: string;
   teaser?: string;
-  link?: string;
-  image?: string;
-  order?: number;
-  visible?: string; // "YES"/"NO"
+  url?: string;
+  date?: string;
+  image?: string;        // fx "op1" | "/news/op1.jpg" | "op1.jpg"
+  order?: number | string;
+  visible?: string;      // "YES"/"NO" (valgfri)
 };
 
-function asStr(v: unknown): string {
-  return (v ?? "").toString().trim();
-}
-function asNum(v: unknown): number | undefined {
-  const n = Number(asStr(v));
-  return Number.isFinite(n) ? n : undefined;
+type Item = {
+  title: string;
+  teaser?: string;
+  url?: string;
+  link?: string;         // compat til ældre frontend
+  date?: string;
+  image: string;         // altid gyldig sti
+  order: number;
+  visible: string;
+};
+
+const s = (v: unknown) => (v ?? "").toString().trim();
+
+function resolveImage(v?: string): string {
+  const x = s(v);
+  if (!x) return "/news/default.jpg";
+  if (x.startsWith("/")) return x;                       // allerede absolut public-sti
+  if (/\.(png|jpe?g|webp|gif|svg)$/i.test(x)) return `/news/${x}`; // filnavn med extension
+  // nøgle → filnavn
+  const map: Record<string, string> = {
+    op1: "/news/op1.jpg",
+    op2: "/news/op2.jpg",
+    op3: "/news/op3.jpg",
+    op4: "/news/op4.jpg",
+    default: "/news/default.jpg",
+  };
+  return map[x.toLowerCase()] || map.default;
 }
 
 export async function GET() {
   try {
-    const endpoint = process.env.NEXT_PUBLIC_SHEET_API;
-    if (!endpoint) {
-      return NextResponse.json(
-        { ok: false, error: "Missing NEXT_PUBLIC_SHEET_API" },
-        { status: 500 }
-      );
-    }
-
-    const url = `${endpoint}?tab=NYHEDER`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) {
-      return NextResponse.json(
-        { ok: false, error: `Fetch failed: ${res.status}` },
-        { status: 502 }
-      );
-    }
-
-    const data = (await res.json()) as { items?: SheetRow[] };
-    const all: NewsItem[] = Array.isArray(data.items)
-      ? data.items.map((r: SheetRow): NewsItem => ({
-          title: asStr((r as any).title),
-          teaser: asStr((r as any).teaser),
-          link: asStr((r as any).link),
-          image: asStr((r as any).image) || undefined,
-          order: asNum((r as any).order),
-          visible: asStr((r as any).visible),
-        }))
+    const p = path.join(process.cwd(), "data", "news.json");
+    const raw = await readFile(p, "utf8");
+    const json = JSON.parse(raw);
+    const arr: RawItem[] = Array.isArray(json?.items)
+      ? json.items
+      : Array.isArray(json)
+      ? json
       : [];
 
-    const items: NewsItem[] = all
-      .filter((x: NewsItem) => asStr(x.title) !== "")
-      .filter((x: NewsItem) => asStr(x.visible).toUpperCase() !== "NO")
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const items: Item[] = arr
+      .map((r, i) => {
+        const url = s(r.url) || undefined;
+        const order = Number(r.order ?? i + 1) || i + 1;
+        return {
+          title: s(r.title),
+          teaser: s(r.teaser) || undefined,
+          url,
+          link: url, // compat
+          date: s(r.date) || undefined,
+          image: resolveImage(r.image),
+          order,
+          visible: (s(r.visible) || "YES").toUpperCase(),
+        };
+      })
+      .filter((x) => x.title)
+      .filter((x) => x.visible !== "NO")
+      .sort((a, b) => a.order - b.order);
 
     return NextResponse.json({ ok: true, items }, { status: 200 });
-  } catch (err: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: (err as Error).message ?? "Unknown error" },
+      { ok: false, error: e?.message || "read error" },
       { status: 500 }
     );
   }
 }
+
+/* [HELP:API:NEWS] END */
