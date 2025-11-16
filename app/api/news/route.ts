@@ -1,88 +1,134 @@
-/* [HELP:API:NEWS] START — læs fra data/news.json + billeder i /public/news */
-
+// app/api/news/route.ts
 import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-type RawItem = {
-  title?: string;
-  teaser?: string;
-  url?: string;
-  date?: string;
-  image?: string;        // fx "op1" | "/news/op1.jpg" | "op1.jpg"
-  order?: number | string;
-  visible?: string;      // "YES"/"NO" (valgfri)
-};
+type SheetRow = Record<string, any>;
 
-type Item = {
+type NewsItem = {
   title: string;
   teaser?: string;
+  image?: string;
+  date?: string | null;
   url?: string;
-  link?: string;         // compat til ældre frontend
-  date?: string;
-  image: string;         // altid gyldig sti
-  order: number;
-  visible: string;
 };
 
-const s = (v: unknown) => (v ?? "").toString().trim();
-
-function resolveImage(v?: string): string {
-  const x = s(v);
-  if (!x) return "/news/default.jpg";
-  if (x.startsWith("/")) return x;                       // allerede absolut public-sti
-  if (/\.(png|jpe?g|webp|gif|svg)$/i.test(x)) return `/news/${x}`; // filnavn med extension
-  // nøgle → filnavn
-  const map: Record<string, string> = {
-    op1: "/news/op1.jpg",
-    op2: "/news/op2.jpg",
-    op3: "/news/op3.jpg",
-    op4: "/news/op4.jpg",
-    default: "/news/default.jpg",
-  };
-  return map[x.toLowerCase()] || map.default;
+function isTruthyYes(value: any): boolean {
+  const v = String(value ?? "").trim().toUpperCase();
+  return v === "YES" || v === "TRUE" || v === "1" || v === "JA";
 }
 
 export async function GET() {
-  try {
-    const p = path.join(process.cwd(), "data", "news.json");
-    const raw = await readFile(p, "utf8");
-    const json = JSON.parse(raw);
-    const arr: RawItem[] = Array.isArray(json?.items)
-      ? json.items
-      : Array.isArray(json)
-      ? json
-      : [];
+  const base = process.env.NEXT_PUBLIC_SHEET_API;
+  // Brug samme nøgle som admin – kan sættes i .env.local, ellers falder vi tilbage.
+  const key =
+    process.env.NEXT_PUBLIC_SHEET_KEY ||
+    process.env.ADMIN_SHEET_KEY ||
+    "hdk-admin-dev";
 
-    const items: Item[] = arr
-      .map((r, i) => {
-        const url = s(r.url) || undefined;
-        const order = Number(r.order ?? i + 1) || i + 1;
-        return {
-          title: s(r.title),
-          teaser: s(r.teaser) || undefined,
-          url,
-          link: url, // compat
-          date: s(r.date) || undefined,
-          image: resolveImage(r.image),
-          order,
-          visible: (s(r.visible) || "YES").toUpperCase(),
-        };
-      })
-      .filter((x) => x.title)
-      .filter((x) => x.visible !== "NO")
-      .sort((a, b) => a.order - b.order);
-
-    return NextResponse.json({ ok: true, items }, { status: 200 });
-  } catch (e: any) {
+  if (!base) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "read error" },
+      { ok: false, error: "NEXT_PUBLIC_SHEET_API er ikke sat i .env.local" },
       { status: 500 }
     );
   }
-}
 
-/* [HELP:API:NEWS] END */
+  // Byg URL til Apps Script Web App: ?tab=NYHEDER&key=...
+  const url = new URL(base);
+  url.searchParams.set("tab", "NYHEDER");
+  if (key) {
+    url.searchParams.set("key", key);
+  }
+
+  let raw: any;
+  try {
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Fejl fra Sheet-backend (NYHEDER): HTTP ${res.status} – ${text}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    raw = await res.json();
+  } catch (err: any) {
+    console.error("GET /api/news – fetch error", err);
+    return NextResponse.json(
+      { ok: false, error: "Kunne ikke hente NYHEDER fra Sheet" },
+      { status: 500 }
+    );
+  }
+
+  const rows: SheetRow[] = Array.isArray(raw?.items)
+    ? raw.items
+    : Array.isArray(raw)
+    ? raw
+    : [];
+
+  // Map rækker fra NYHEDER → format til forsiden
+  const items: NewsItem[] = rows
+    .filter((row) => {
+      // Synlighed: hvis der er et 'visible'-felt, brug det. Hvis ikke, vis den.
+      const visible = row.visible;
+      if (visible === undefined || visible === null || visible === "") {
+        return true;
+      }
+      return isTruthyYes(visible);
+    })
+    .map((row) => {
+      const title =
+        row.title ||
+        row.headline ||
+        row.overskrift ||
+        row.label ||
+        row.key ||
+        "";
+
+      const teaser =
+        row.teaser ||
+        row.intro ||
+        row.summary ||
+        row.subtitle ||
+        row.tagline ||
+        "";
+
+      const image = row.image_url || row.image || row.img || "";
+
+      const dateRaw = row.start_date || row.date || row.published_at || "";
+      let date: string | null = null;
+      if (dateRaw) {
+        const d = new Date(dateRaw);
+        if (!Number.isNaN(d.getTime())) {
+          date = d.toISOString();
+        }
+      }
+
+      const url =
+        row.url || row.link || row.href || row.slug || row.target_url || "";
+
+      return {
+        title: String(title || "").trim(),
+        teaser: teaser ? String(teaser) : "",
+        image: image ? String(image) : "",
+        date,
+        url: url ? String(url) : "",
+      };
+    })
+    .filter((item) => item.title); // smid tomme væk
+
+  // Sortér nyheder (nyeste først, hvis der er dato)
+  items.sort((a, b) => {
+    const at = a.date ? Date.parse(a.date) : 0;
+    const bt = b.date ? Date.parse(b.date) : 0;
+    return bt - at;
+  });
+
+  return NextResponse.json({ ok: true, items });
+}

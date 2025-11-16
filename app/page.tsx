@@ -16,16 +16,12 @@ import HeroBackdropSlider from "../components/HeroBackdropSlider";
 type ViewState = { map: SheetMap; updated?: string };
 
 export default function Page() {
-  /** [HELP:HOME:STATE] START
-   * Pitch: Lokal state for forsiden. `state.map` rummer data fra Google Sheet (via getForsideData).
-   * `loading` styrer den lille status i bunden.
-   * [HELP:HOME:STATE] END */
+  /** [HELP:HOME:STATE] START */
   const [state, setState] = useState<ViewState>({ map: {} as SheetMap });
   const [loading, setLoading] = useState(true);
+  /** [HELP:HOME:STATE] END */
 
-  /** [HELP:HOME:DATA:FETCH] START
-   * Pitch: Henter data til forsiden (hero-tekster, kort-titler/links, mm.)
-   * [HELP:HOME:DATA:FETCH] END */
+  /** [HELP:HOME:DATA:FETCH] START */
   useEffect(() => {
     (async () => {
       const data = await getForsideData();
@@ -33,48 +29,40 @@ export default function Page() {
       setLoading(false);
     })();
   }, []);
+  /** [HELP:HOME:DATA:FETCH] END */
 
-  /** [HELP:HOME:DATA:MAP] START
-   * Pitch: Aflæsning af felter fra datastrukturen.
-   * `heroTitle` og `heroSub` falder tilbage til faste strenge, hvis sheet ikke giver værdi.
-   * [HELP:HOME:DATA:MAP] END */
+  /** [HELP:HOME:DATA:MAP] START */
   const d = state.map || ({} as any);
-  /** [HELP:HOME:HERO:TEXTS] START — hero-overskrift/undertitel (kan styres via Sheet) */
+
   const heroTitle = d?.hero?.title || "Humlum Dartklub";
   const heroSub = d?.hero?.subtitle || "Fællesskab & Præcision";
-  /** [HELP:HOME:HERO:TEXTS] END */
+  /** [HELP:HOME:DATA:MAP] END */
 
-  /** [HELP:HOME:NAV-CARDS] START
-   * Pitch: De tre forside-kort (linkbokse). Ret kun tekster/links her.
-   * Under-ankre gør det nemt at ændre ét kort ad gangen.
-   * [HELP:HOME:NAV-CARDS] END */
+  /** [HELP:HOME:NAV-CARDS] START */
   const cards = [
-    // [HELP:HOME:NAV-CARDS:MEMBER] START — kort 1 (Bliv medlem)
-    { t: d?.cards?.c1_title || "Bliv medlem", href: (d?.cards?.c1_link || "/bliv-medlem").trim() || "/bliv-medlem" },
-    // [HELP:HOME:NAV-CARDS:MEMBER] END
-
-    // [HELP:HOME:NAV-CARDS:SPONSOR] START — kort 2 (Sponsor os)
-    // Hvis du vil omdøbe til "Støt os Bliv sponsor", erstat blot tekststrengen her.
-    { t: d?.cards?.c2_title || "Støt os Bliv sponsor", href: (d?.cards?.c2_link || "/sponsor").trim() || "/sponsor" },
-    // [HELP:HOME:NAV-CARDS:SPONSOR] END
-
-    // [HELP:HOME:NAV-CARDS:EVENTS] START — kort 3 (Events & aktiviteter)
-    { t: d?.cards?.c3_title || "Events & aktiviteter", href: (d?.cards?.c3_link || "/events").trim() || "/events" }
-    // [HELP:HOME:NAV-CARDS:EVENTS] END
+    {
+      t: d?.cards?.c1_title || "Bliv medlem",
+      href: (d?.cards?.c1_link || "/bliv-medlem").trim() || "/bliv-medlem",
+    },
+    {
+      t: d?.cards?.c2_title || "Støt os Bliv sponsor",
+      href: (d?.cards?.c2_link || "/sponsor").trim() || "/sponsor",
+    },
+    {
+      t: d?.cards?.c3_title || "Events & aktiviteter",
+      href: (d?.cards?.c3_link || "/events").trim() || "/events",
+    },
   ];
+  /** [HELP:HOME:NAV-CARDS] END */
 
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      {/* [HELP:HOME:SECTION:HERO] START
-          Pitch: HERO — baggrunds-slideshow, stor titel, undertitel og nyhedsboks. */}
+      {/* [HELP:HOME:SECTION:HERO] START */}
       <section className="hdk-hero mt-6 relative overflow-hidden rounded-[2rem]">
-        {/* [HELP:HOME:HERO:BACKDROP] START — baggrundsslider */}
         <div className="absolute inset-0 z-0">
           <HeroBackdropSlider />
         </div>
-        {/* [HELP:HOME:HERO:BACKDROP] END */}
 
-        {/* [HELP:HOME:HERO:TEXTLAYER] START — forgrundstekster (titel/undertitel) */}
         <div className="relative z-10 hdk-hero-inner px-4 sm:px-6 md:px-8 py-6">
           <div className="max-w-[min(92vw,760px)]">
             <h1
@@ -101,53 +89,64 @@ export default function Page() {
             </p>
           </div>
         </div>
-        {/* [HELP:HOME:HERO:TEXTLAYER] END */}
-
-        {/* [HELP:HOME:HERO:NEWS] START — nyhedsboks nederst-højre */}
-        <NewsHeroOverlay />
-        {/* [HELP:HOME:HERO:NEWS] END */}
       </section>
       {/* [HELP:HOME:SECTION:HERO] END */}
 
-      {/* [HELP:HOME:SECTION:NAV-CARDS] START
-          Pitch: 3 kort med links til centrale undersider. Tekst/links styres af `cards` ovenfor. */}
-      <section className="mt-10 card-grid sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c, i) => (
-          <Link key={i} href={c.href} className="card group">
-            <h3 className="text-lg font-semibold text-gray-900">{c.t}</h3>
-            <p className="mt-2 text-sm text-gray-600">Klik for at læse mere.</p>
-            <div className="card-footer">
-              <span className="btn btn-primary">Gå til →</span>
-            </div>
-          </Link>
-        ))}
-      </section>
-      {/* [HELP:HOME:SECTION:NAV-CARDS] END */}
+      {/* [HELP:HOME:SECTION:GRID-ABOVE-LINKS] START
+          2×2 kort til venstre + nyhedskort i højre kolonne (row-span-2). */}
+      <section className="mt-10 grid gap-6 lg:grid-cols-3">
+        {/* Kort 1: Bliv medlem */}
+        <Link href={cards[0].href} className="card group">
+          <h3 className="text-lg font-semibold text-gray-900">{cards[0].t}</h3>
+          <p className="mt-2 text-sm text-gray-600">Klik for at læse mere.</p>
+          <div className="card-footer">
+            <span className="btn btn-primary">Gå til →</span>
+          </div>
+        </Link>
 
-      {/* [HELP:HOME:SECTION:LOGIN] START
-          Pitch: Medlemslogin sektion. Kun tekster/knap-link. */}
-      <section className="mt-12 section-header">
-        <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
-          MEDLEMSLOGIN
+        {/* Kort 2: Støt os / Bliv sponsor */}
+        <Link href={cards[1].href} className="card group">
+          <h3 className="text-lg font-semibold text-gray-900">{cards[1].t}</h3>
+          <p className="mt-2 text-sm text-gray-600">Klik for at læse mere.</p>
+          <div className="card-footer">
+            <span className="btn btn-primary">Gå til →</span>
+          </div>
+        </Link>
+
+        {/* Nyhedskort – fylder højre kolonne, begge rækker */}
+        <div className="lg:row-span-2">
+          <NewsHeroOverlay />
         </div>
 
-        <h2 className="section-title">Medlemslogin</h2>
-        <div className="section-underline" />
-        <p className="section-subtitle">
-          Adgang til interne dokumenter, træningsmaterialer og medlemsside.
-        </p>
+        {/* Kort 3: Events & aktiviteter */}
+        <Link href={cards[2].href} className="card group">
+          <h3 className="text-lg font-semibold text-gray-900">{cards[2].t}</h3>
+          <p className="mt-2 text-sm text-gray-600">Klik for at læse mere.</p>
+          <div className="card-footer">
+            <span className="btn btn-primary">Gå til →</span>
+          </div>
+        </Link>
 
-        <div className="mt-4">
-          <Link href="/medlemslogin" className="btn btn-primary">
-            Gå til medlemslogin
-          </Link>
-        </div>
+        {/* Kort 4: Medlemslogin */}
+        <Link href="/medlemslogin" className="card group">
+          <div className="kicker mb-1">
+            <span className="h-2 w-2 rounded-full bg-lime-500" />
+            MEDLEMSLOGIN
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Medlemslogin
+          </h3>
+          <p className="mt-2 text-sm text-gray-600">
+            Adgang til interne dokumenter, træningsmaterialer og medlemsside.
+          </p>
+          <div className="card-footer">
+            <span className="btn btn-primary">Gå til medlemslogin</span>
+          </div>
+        </Link>
       </section>
-      {/* [HELP:HOME:SECTION:LOGIN] END */}
+      {/* [HELP:HOME:SECTION:GRID-ABOVE-LINKS] END */}
 
-      {/* [HELP:HOME:SECTION:LINKS] START
-          Pitch: Info & eksterne links. Tilpas kun tekster/URL'er. */}
+      {/* [HELP:HOME:SECTION:LINKS] START */}
       <section className="mt-12 section-header">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
@@ -195,8 +194,7 @@ export default function Page() {
       </section>
       {/* [HELP:HOME:SECTION:LINKS] END */}
 
-      {/* [HELP:HOME:SECTION:UPDATED] START
-          Pitch: Lille statuslinje nederst med "Sidst opdateret". */}
+      {/* [HELP:HOME:SECTION:UPDATED] START */}
       <section className="mt-8 mb-10 text-right text-xs text-slate-500">
         {loading
           ? "Loader data..."

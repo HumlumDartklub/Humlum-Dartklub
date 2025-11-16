@@ -1,155 +1,228 @@
 "use client";
 
-/* [HELP:PAY:IMPORTS] START
- * Pitch: Importer til betalingssiden. Tilføj her hvis du introducerer nye hooks/funktioner.
- * [HELP:PAY:IMPORTS] END */
+/* [HELP:PAY:IMPORTS] START */
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+/* [HELP:PAY:IMPORTS] END */
 
-/* [HELP:PAY:TYPES] START
- * Pitch: Typer for betalingsmetoder mv.
- * [HELP:PAY:TYPES] END */
 type Method = "MobilePay" | "Kontant" | "Bankoverførsel";
 
-/* [HELP:PAY:COMPONENT] START
- * Pitch: Hovedkomponenten for betalingssiden.
- * [HELP:PAY:COMPONENT] END */
-export default function BetalingPage() {
-  /* [HELP:PAY:STATE] START
-   * Pitch: Side-state. `draft` kommer fra sessionStorage (udfyldt på /bliv-medlem). */
-  const router = useRouter();
-  const [draft, setDraft] = useState<any|null>(null);
-  const [method, setMethod] = useState<Method>("MobilePay");
-  const [freq, setFreq] = useState<"12"|"6"|"4"|"3"|"1">("12"); // betalinger pr. år
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string|null>(null);
-  const [done, setDone] = useState(false);
-  /* [HELP:PAY:STATE] END */
+type FamilyMember = {
+  firstName: string;
+  lastName: string;
+  birthYear: string;
+  isPrimary?: boolean;
+};
 
-  /* [HELP:PAY:DATA:LOAD] START
-   * Pitch: Hent udkast fra sessionStorage og vælg default betalingsmetode.
-   * [HELP:PAY:ENV:MP_LINK] Hvis NEXT_PUBLIC_MOBILEPAY_LINK ikke er sat, falder vi tilbage til 'Kontant'. */
+export default function BetalingPage() {
+  const router = useRouter();
+
+  /* STATE */
+  const [draft, setDraft] = useState<any | null>(null);
+  const [method, setMethod] = useState<Method>("MobilePay");
+  const [freq, setFreq] = useState<"12" | "6" | "4" | "3" | "1">("12");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  /* LOAD DRAFT */
   useEffect(() => {
     const t = sessionStorage.getItem("HDK_JOIN_DRAFT");
     const data = t ? JSON.parse(t) : null;
     setDraft(data);
-    const hasMp = (process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "").trim().length > 0;
+    const hasMp =
+      (process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "").trim().length > 0;
     setMethod(hasMp ? "MobilePay" : "Kontant");
   }, []);
-  /* [HELP:PAY:DATA:LOAD] END */
 
-  /* [HELP:PAY:COMPUTE] START
-   * Pitch: Afl edte beløb og totaler til visning. */
-  const priceMonth = useMemo(() => Number(draft?.price_dkk_per_month||0), [draft]); /* [HELP:PAY:COMPUTE:PRICE_MONTH] */
-  const paymentsPerYear = useMemo(() => Number(freq), [freq]);                      /* [HELP:PAY:COMPUTE:PAYMENTS_PER_YEAR] */
-  const amountPerPayment = useMemo(() => priceMonth * (12 / paymentsPerYear), [priceMonth, paymentsPerYear]); /* [HELP:PAY:COMPUTE:AMOUNT_PER_PAYMENT] */
-  const totalPerYear = useMemo(() => priceMonth * 12, [priceMonth]);                /* [HELP:PAY:COMPUTE:TOTAL_PER_YEAR] */
-  /* [HELP:PAY:COMPUTE] END */
+  /* PRICES */
+  const priceMonth = useMemo(
+    () => Number((draft as any)?.price_dkk_per_month || 0),
+    [draft]
+  );
+  const paymentsPerYear = useMemo(() => Number(freq), [freq]);
+  const amountPerPayment = useMemo(
+    () => priceMonth * (12 / paymentsPerYear),
+    [priceMonth, paymentsPerYear]
+  );
+  const totalPerYear = useMemo(() => priceMonth * 12, [priceMonth]);
 
-  /* [HELP:PAY:SUBMIT] START
-   * Pitch: Send tilmelding til backend (/api/join). Håndterer success/fejl. */
+  /* FAMILY MEMBERS – primær + ekstra (hovedmedlem + øvrige) */
+  const allFamilyMembers = useMemo(() => {
+    const anyDraft = draft as any;
+    const list: FamilyMember[] = [];
+    if (!anyDraft) return list;
+
+    // Hovedmedlem (den der udfylder formularen)
+    const primaryFirst = String(anyDraft.first_name ?? "").trim();
+    const primaryLast = String(anyDraft.last_name ?? "").trim();
+    const primaryYear = String(anyDraft.birth_year ?? "").trim();
+
+    if (primaryFirst || primaryLast || primaryYear) {
+      list.push({
+        firstName: primaryFirst,
+        lastName: primaryLast,
+        birthYear: primaryYear,
+        isPrimary: true,
+      });
+    }
+
+    // Øvrige familiemedlemmer fra family_members-listen (fra /bliv-medlem)
+    const raw =
+      anyDraft.family_members ??
+      anyDraft.familyMembers ??
+      anyDraft.family ??
+      null;
+
+    if (Array.isArray(raw)) {
+      const extras = raw
+        .map((m: any) => ({
+          firstName: String(
+            m.first_name ??
+              m.firstName ??
+              m.first ??
+              m.fornavn ??
+              ""
+          ).trim(),
+          lastName: String(
+            m.last_name ??
+              m.lastName ??
+              m.last ??
+              m.efternavn ??
+              ""
+          ).trim(),
+          birthYear: String(
+            m.birth_year ??
+              m.birthYear ??
+              m.year ??
+              m.foedselsaar ??
+              ""
+          ).trim(),
+        }))
+        .filter((m) => m.firstName || m.lastName || m.birthYear);
+      list.push(...extras);
+    }
+
+    return list;
+  }, [draft]);
+
+  const householdCount = useMemo(() => {
+    const anyDraft = draft as any;
+    const raw = Number(anyDraft?.household);
+    if (!Number.isNaN(raw) && raw > 0) return raw;
+    return allFamilyMembers.length || 1;
+  }, [draft, allFamilyMembers]);
+
+  /* SUBMIT */
   async function submit() {
     if (!draft) return;
     setMsg(null);
     setBusy(true);
     try {
-      /* [HELP:PAY:SUBMIT:PAYLOAD] START — data vi sender */
       const payload = {
-        ...draft,
-        payment_method: method.toLowerCase(), // mobilepay/kontant/bankoverførsel
+        ...(draft as any),
+        payment_method: method.toLowerCase(),
         payment_frequency: paymentsPerYear,
         amount_per_payment: amountPerPayment,
         total_per_year: totalPerYear,
       };
-      /* [HELP:PAY:SUBMIT:PAYLOAD] END */
 
-      /* [HELP:PAY:SUBMIT:FETCH] START — POST til API */
       const res = await fetch("/api/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept":"application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify(payload),
       });
-      const text = await res.text();
-      let data: any = null; try { data = JSON.parse(text); } catch {}
-      if (!res.ok || !data?.ok) {
-        throw new Error((data && (data.error || data.message)) || text || `Kunne ikke gemme (HTTP ${res.status})`);
-      }
-      /* [HELP:PAY:SUBMIT:FETCH] END */
 
-      /* [HELP:PAY:SUBMIT:SUCCESS] START — ryd udkast og vis tak-side */
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(
+          (data && (data.error || data.message)) ||
+            text ||
+            `Kunne ikke gemme (HTTP ${res.status})`
+        );
+      }
+
       setDone(true);
       sessionStorage.removeItem("HDK_JOIN_DRAFT");
-      /* [HELP:PAY:SUBMIT:SUCCESS] END */
     } catch (e: any) {
-      /* [HELP:PAY:SUBMIT:ERROR] START — fejlbesked til bruger */
       setMsg(e?.message || "Der skete en fejl.");
-      /* [HELP:PAY:SUBMIT:ERROR] END */
     } finally {
       setBusy(false);
     }
   }
-  /* [HELP:PAY:SUBMIT] END */
 
-  /* [HELP:PAY:RENDER:NO_DRAFT] START
-   * Pitch: Hvis brugeren lander her uden udkast, vis besked og link tilbage. */
+  /* NO DRAFT */
   if (!draft) {
     return (
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
         <div className="section-header">
-          <div className="kicker"><span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling</div>
+          <div className="kicker">
+            <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
+          </div>
           <h1 className="section-title">Mangler oplysninger</h1>
           <div className="section-underline" />
         </div>
         <p className="text-slate-700">Start forfra på tilmeldingen.</p>
         <div className="mt-4">
-          <a className="btn btn-primary" href="/bliv-medlem">Tilbage til Bliv medlem</a>
+          <a className="btn btn-primary" href="/bliv-medlem">
+            Tilbage til Bliv medlem
+          </a>
         </div>
       </main>
     );
   }
-  /* [HELP:PAY:RENDER:NO_DRAFT] END */
 
-  /* [HELP:PAY:RENDER:DONE] START
-   * Pitch: Vis tak-besked når indsendelse lykkes. */
+  /* DONE VIEW */
   if (done) {
     return (
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
         <div className="section-header">
-          <div className="kicker"><span className="h-2 w-2 rounded-full bg-lime-500" /> Tilmelding</div>
-          <h1 className="section-title">Tak for din tilmelding!</h1>
-          <div className="section-underline" />
+          <div className="kicker">
+            <span className="h-2 w-2 rounded-full bg-lime-500" /> Tilmelding
+          </div>
         </div>
-        <p className="text-slate-700">
-          Vi har modtaget din ansøgning til <b>{draft.package_id}</b>. Du får en bekræftelse pr. e-mail, og vi kontakter dig, når betalingen er registreret.
+        <h1 className="section-title">Tak for din tilmelding!</h1>
+        <div className="section-underline" />
+        <p className="text-slate-700 mt-4">
+          Vi har modtaget din ansøgning til{" "}
+          <b>{(draft as any).package_id}</b>. Du får en bekræftelse pr. e-mail,
+          og vi kontakter dig, når betalingen er registreret.
         </p>
       </main>
     );
   }
-  /* [HELP:PAY:RENDER:DONE] END */
 
-  /* [HELP:PAY:RENDER:MAIN] START
-   * Pitch: Hovedlayout for betaling — header, opsummering, valg og CTA. */
+  /* MAIN VIEW */
   return (
     <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
-      {/* [HELP:PAY:HEADER] START — sideheader */}
+      {/* HEADER */}
       <div className="section-header">
-        <div className="kicker"><span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling</div>
+        <div className="kicker">
+          <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
+        </div>
         <h1 className="section-title">Vælg betalingsmetode og frekvens</h1>
         <div className="section-underline" />
       </div>
-      {/* [HELP:PAY:HEADER] END */}
 
-      {/* [HELP:PAY:GRID] START — 2-kolonne layout: opsummering (venstre) + valg (højre) */}
       <div className="grid lg:grid-cols-3 gap-6 mt-6">
-        {/* [HELP:PAY:SUMMARY] START — opsummering af valg fra /bliv-medlem */}
+        {/* OPSUMMERING */}
         <section className="lg:col-span-2 card">
           <h2 className="text-lg font-semibold">Opsummering</h2>
 
-          {/* [HELP:PAY:SUMMARY:GRID] START — talbokse */}
           <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl border p-3">
               <div className="text-slate-500">Pakke</div>
-              <div className="font-semibold">{draft.package_id}</div>
+              <div className="font-semibold">{(draft as any).package_id}</div>
             </div>
             <div className="rounded-xl border p-3">
               <div className="text-slate-500">Pris pr. måned</div>
@@ -169,49 +242,60 @@ export default function BetalingPage() {
             </div>
             <div className="rounded-xl border p-3">
               <div className="text-slate-500">Navn</div>
-              <div className="font-semibold">{draft.first_name} {draft.last_name}</div>
+              <div className="font-semibold">
+                {(draft as any).first_name} {(draft as any).last_name}
+              </div>
             </div>
           </div>
-          {/* [HELP:PAY:SUMMARY:GRID] END */}
 
-          {/* [HELP:PAY:SUMMARY:FAMILY] START — liste over familiemedlemmer (hvis relevant) */}
-          {draft.household && Number(draft.household) > 1 && Array.isArray(draft.family_members) && (
+          {/* FAMILIEMEDLEMMER */}
+          {allFamilyMembers.length > 0 && (
             <div className="mt-4">
-              <h3 className="font-semibold mb-2">Familiemedlemmer ({draft.household})</h3>
-              <ul className="list-disc pl-6 text-sm">
-                {draft.family_members.map((m:any, i:number) => (
-                  <li key={i}>{m.first_name} {m.last_name} — {m.birth_year}</li>
-                ))}
+              <h3 className="font-semibold mb-1">
+                Familiemedlemmer ({householdCount})
+              </h3>
+              <p className="text-xs text-slate-500 mb-1">
+                Tjek at alle familiemedlemmer er med – fx 2 voksne + 2 børn
+                eller 1 voksen + 1–3 børn, før du bekræfter.
+              </p>
+              <ul className="list-disc pl-6 text-sm space-y-0.5">
+                {allFamilyMembers.map((m, i) => {
+                  const name = `${m.firstName} ${m.lastName}`.trim();
+                  return (
+                    <li key={i}>
+                      {name || "Navn mangler"}
+                      {m.birthYear && ` — ${m.birthYear}`}
+                      {m.isPrimary && " (hovedmedlem)"}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
-          {/* [HELP:PAY:SUMMARY:FAMILY] END */}
         </section>
-        {/* [HELP:PAY:SUMMARY] END */}
 
-        {/* [HELP:PAY:METHODS] START — valg af metode og frekvens */}
+        {/* BETALINGSVALG */}
         <aside className="card">
           <h2 className="text-lg font-semibold">Vælg betaling</h2>
 
-          {/* [HELP:PAY:METHODS:SELECT] START — metode */}
-          <label className="block text-sm font-medium mt-3">Betalingsmetode</label>
+          <label className="block text-sm font-medium mt-3">
+            Betalingsmetode
+          </label>
           <select
             className="mt-1 w-full rounded-xl border px-3 py-2"
             value={method}
-            onChange={(e)=>setMethod(e.target.value as Method)}
+            onChange={(e) => setMethod(e.target.value as Method)}
           >
             <option>MobilePay</option>
             <option>Kontant</option>
             <option>Bankoverførsel</option>
           </select>
-          {/* [HELP:PAY:METHODS:SELECT] END */}
 
-          {/* [HELP:PAY:FREQ] START — frekvens */}
           <label className="block text-sm font-medium mt-4">Frekvens</label>
           <select
             className="mt-1 w-full rounded-xl border px-3 py-2"
             value={freq}
-            onChange={(e)=>setFreq(e.target.value as any)}
+            onChange={(e) => setFreq(e.target.value as any)}
           >
             <option value="12">12× (månedligt)</option>
             <option value="6">6× (hver 2. måned)</option>
@@ -219,22 +303,21 @@ export default function BetalingPage() {
             <option value="3">3× (hver 4. måned)</option>
             <option value="1">1× (årligt)</option>
           </select>
-          {/* [HELP:PAY:FREQ] END */}
 
-          {/* [HELP:PAY:AMOUNT] START — “du betaler” boks */}
           <div className="mt-4 rounded-xl border p-3 text-sm">
             <div className="text-slate-500">Du betaler</div>
-            <div className="font-semibold">{amountPerPayment} kr {paymentsPerYear}× pr. år</div>
+            <div className="font-semibold">
+              {amountPerPayment} kr {paymentsPerYear}× pr. år
+            </div>
           </div>
-          {/* [HELP:PAY:AMOUNT] END */}
 
-          {/* [HELP:PAY:MSG] START — fejlbesked */}
           {msg && <p className="mt-3 text-sm text-red-600">{msg}</p>}
-          {/* [HELP:PAY:MSG] END */}
 
-          {/* [HELP:PAY:CTA] START — knapper (tilbage / send) */}
           <div className="mt-4 flex gap-2">
-            <button onClick={()=>router.push("/bliv-medlem")} className="px-4 py-2 rounded-xl border">
+            <button
+              onClick={() => router.push("/bliv-medlem")}
+              className="px-4 py-2 rounded-xl border"
+            >
               Tilbage
             </button>
             <button
@@ -245,12 +328,8 @@ export default function BetalingPage() {
               {busy ? "Sender…" : "Bekræft og send"}
             </button>
           </div>
-          {/* [HELP:PAY:CTA] END */}
         </aside>
-        {/* [HELP:PAY:METHODS] END */}
       </div>
-      {/* [HELP:PAY:GRID] END */}
     </main>
   );
-  /* [HELP:PAY:RENDER:MAIN] END */
 }
