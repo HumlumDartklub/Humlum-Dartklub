@@ -62,7 +62,18 @@ export default function AdminLanding() {
 
         if (cancelled) return;
 
-        const klubinfo = klubinfoRows[0] ?? {};
+        // KLUBINFO v3 → key/value map
+        const klubinfo =
+          Array.isArray(klubinfoRows)
+            ? klubinfoRows.reduce((acc: Record<string, any>, row: any) => {
+                if (!row) return acc;
+                const key = (row.key ?? "").toString().trim();
+                if (!key) return acc;
+                const value = row.value ?? "";
+                acc[key] = value;
+                return acc;
+              }, {} as Record<string, any>)
+            : ({} as Record<string, any>);
 
         const totalIndmeldinger = indmeldingerRows.length;
         const pendingIndmeldinger = indmeldingerRows.filter(
@@ -131,6 +142,10 @@ export default function AdminLanding() {
   }, []);
 
   const klubinfo = stats?.klubinfo ?? {};
+  const clubName = (klubinfo["club.name"] ?? "Humlum Dartklub") as string;
+  const clubEmail = (klubinfo["club.email"] ?? "—") as string;
+  const clubPhone = (klubinfo["club.phone"] ?? "—") as string;
+  const clubCVR = (klubinfo["club.cvr"] ?? "") as string;
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
@@ -182,15 +197,11 @@ export default function AdminLanding() {
             </div>
 
             <div>
-              <div className="text-xs uppercase text-neutral-500">
-                Events
-              </div>
+              <div className="text-xs uppercase text-neutral-500">Events</div>
               <div className="text-lg font-semibold">
                 {stats?.events?.synlige ?? "—"}
               </div>
-              <div className="text-xs text-neutral-500">
-                Synlige i EVENTS
-              </div>
+              <div className="text-xs text-neutral-500">Synlige i EVENTS</div>
             </div>
 
             <div>
@@ -217,23 +228,27 @@ export default function AdminLanding() {
             <div>
               <span className="text-xs uppercase text-neutral-500">Navn</span>
               <div className="font-medium">
-                {klubinfo.navn || "Humlum Dartklub"}
+                {clubName || "Humlum Dartklub"}
               </div>
             </div>
             <div>
               <span className="text-xs uppercase text-neutral-500">Email</span>
-              <div>{klubinfo.email || "—"}</div>
+              <div>{clubEmail || "—"}</div>
             </div>
             <div>
               <span className="text-xs uppercase text-neutral-500">
                 Telefon
               </span>
-              <div>{klubinfo.telefon || "—"}</div>
+              <div>{clubPhone || "—"}</div>
+            </div>
+            <div>
+              <span className="text-xs uppercase text-neutral-500">CVR</span>
+              <div>{clubCVR || "—"}</div>
             </div>
           </div>
           <div className="text-right text-xs text-neutral-500">
-            Data hentes direkte fra fanen &quot;Klubinfo&quot; i
-            HDK_Admin_v3. Redigering kommer i et senere trin.
+            Data hentes direkte fra fanen &quot;Klubinfo&quot; i HDK_Admin_v3.
+            Redigering kommer i et senere trin.
           </div>
         </div>
       </section>
@@ -297,7 +312,6 @@ export default function AdminLanding() {
           </div>
         </div>
 
-        {/* NY: Ticker & Nyheder ER KLIKKBAR */}
         <Link
           href="/admin/ticker"
           className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm active:scale-[0.98] transition"

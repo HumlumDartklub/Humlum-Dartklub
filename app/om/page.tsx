@@ -53,20 +53,24 @@ function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
       const d = new Date(start);
       const dayDiff = (r.weekday - d.getDay() + 7) % 7;
       d.setDate(d.getDate() + dayDiff + weeksChecked * 7 * intervalWeeks);
-      const [hh, mm] = r.timeHHMM.split(":").map(n => parseInt(n, 10));
+      const [hh, mm] = r.timeHHMM.split(":").map((n) => parseInt(n, 10));
       d.setHours(hh, mm, 0, 0);
       if (d.getTime() <= now.getTime()) continue;
 
-      const isoDate = d.toISOString().slice(0,10);
+      const isoDate = d.toISOString().slice(0, 10);
       const time = r.timeHHMM;
-      const dateLabel = d.toLocaleDateString("da-DK", { weekday:"short", day:"2-digit", month:"short" });
+      const dateLabel = d.toLocaleDateString("da-DK", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      });
       const label = `${dateLabel} · ${time}`;
       out.push({ date: d, isoDate, time, label });
       if (out.length >= count) break;
     }
     weeksChecked += 1;
   }
-  return out.sort((a,b)=>a.date.getTime()-b.date.getTime());
+  return out.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 /* [HELP:ABOUT:UTIL:nextSlots] END */
 
@@ -113,7 +117,9 @@ export default function AboutPage() {
         !email ? "e-mail" : null,
         !selectedDate ? "dato" : null,
         !selectedTime ? "tidspunkt" : null,
-      ].filter(Boolean).join(", ");
+      ]
+        .filter(Boolean)
+        .join(", ");
       setMsg(`Udfyld venligst: ${missing}.`);
       return;
     }
@@ -139,10 +145,14 @@ export default function AboutPage() {
       });
       if (!res.ok) throw new Error("API svarede ikke OK");
       setMsg("Tak! Din prøvetræning er registreret – vi bekræfter pr. mail.");
-      // Nulstil felter
-      setName(""); setEmail(""); setPhone(""); setNote("");
-    } catch (e:any) {
-      setMsg("Kunne ikke gemme lige nu. Prøv igen om lidt – eller skriv til humlumdartklub@gmail.com.");
+      setName("");
+      setEmail("");
+      setPhone("");
+      setNote("");
+    } catch (e: any) {
+      setMsg(
+        "Kunne ikke gemme lige nu. Prøv igen om lidt – eller skriv til humlumdartklub@gmail.com.",
+      );
     } finally {
       setBusy(false);
     }
@@ -154,7 +164,10 @@ export default function AboutPage() {
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
       {/* [HELP:ABOUT:TOP:QUICKBAR] START — sticky quick-bar */}
       <div className="mb-4 sticky top-2 z-20 flex flex-wrap gap-2 bg-white/80 backdrop-blur-sm p-2 rounded-xl border">
-        <button onClick={() => setShowBooking(true)} className="px-3 py-1.5 rounded-xl bg-black text-white hover:opacity-90">
+        <button
+          onClick={() => setShowBooking(true)}
+          className="px-3 py-1.5 rounded-xl bg-black text-white hover:opacity-90"
+        >
           🎯 Book prøvetræning
         </button>
         <a
@@ -165,10 +178,16 @@ export default function AboutPage() {
         >
           🗺️ Find os (nyt vindue)
         </a>
-        <button onClick={() => go("vedtaegter")} className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50">
+        <button
+          onClick={() => go("vedtaegter")}
+          className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50"
+        >
           📜 Vedtægter
         </button>
-        <button onClick={() => go("kontakt")} className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50">
+        <button
+          onClick={() => go("kontakt")}
+          className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50"
+        >
           🤝 Kontakt
         </button>
       </div>
@@ -183,21 +202,63 @@ export default function AboutPage() {
         <h1 className="section-title">Om Humlum Dartklub</h1>
         <div className="section-underline" />
         <p className="section-subtitle">
-          Humlum Dartklub er et lokalt fællesskab for alle der synes, at præcision er sjovt, og at grin hører til i træningslokalet.
-          Vi bygger et trygt miljø hvor nye kan lære fundamentet i roligt tempo, og øvede kan skærpe formen med strukturerede forløb,
-          interne events og kammeratligt pres. Fokus: fællesskab, udvikling og gode rammer.
+          Humlum Dartklub er et lokalt fællesskab for alle der synes, at
+          præcision er sjovt, og at grin hører til i træningslokalet. Vi bygger
+          et trygt miljø hvor nye kan lære fundamentet i roligt tempo, og øvede
+          kan skærpe formen med strukturerede forløb, interne events og
+          kammeratligt pres. Fokus: fællesskab, udvikling og gode rammer.
         </p>
 
         {/* [HELP:ABOUT:INTRO:TOC] START — mini-TOC */}
         <nav className="mt-3 text-sm text-emerald-800 flex flex-wrap gap-x-4 gap-y-1">
-          <button onClick={() => setShowBooking(true)} className="underline hover:no-underline">Træning</button>
-          <button onClick={() => go("vedtaegter")} className="underline hover:no-underline">Vedtægter</button>
-          <button onClick={() => go("hold")} className="underline hover:no-underline">Hold & rækker</button>
-          <button onClick={() => go("vaerdier")} className="underline hover:no-underline">Værdier</button>
-          <button onClick={() => go("bestyrelse")} className="underline hover:no-underline">Bestyrelse</button>
-          <button onClick={() => go("dokumenter")} className="underline hover:no-underline">Dokumenter</button>
-          <button onClick={() => go("find-os")} className="underline hover:no-underline">Find os</button>
-          <button onClick={() => go("kontakt")} className="underline hover:no-underline">Kontakt</button>
+          <button
+            onClick={() => setShowBooking(true)}
+            className="underline hover:no-underline"
+          >
+            Træning
+          </button>
+          <button
+            onClick={() => go("vedtaegter")}
+            className="underline hover:no-underline"
+          >
+            Vedtægter
+          </button>
+          <button
+            onClick={() => go("hold")}
+            className="underline hover:no-underline"
+          >
+            Hold &amp; rækker
+          </button>
+          <button
+            onClick={() => go("vaerdier")}
+            className="underline hover:no-underline"
+          >
+            Værdier
+          </button>
+          <button
+            onClick={() => go("bestyrelse")}
+            className="underline hover:no-underline"
+          >
+            Bestyrelse
+          </button>
+          <button
+            onClick={() => go("dokumenter")}
+            className="underline hover:no-underline"
+          >
+            Dokumenter
+          </button>
+          <button
+            onClick={() => go("find-os")}
+            className="underline hover:no-underline"
+          >
+            Find os
+          </button>
+          <button
+            onClick={() => go("kontakt")}
+            className="underline hover:no-underline"
+          >
+            Kontakt
+          </button>
         </nav>
         {/* [HELP:ABOUT:INTRO:TOC] END */}
       </section>
@@ -205,9 +266,59 @@ export default function AboutPage() {
 
       {/* [HELP:ABOUT:GRID] START — dashboard-sektioner */}
       <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* [HELP:ABOUT:SEC:VEDTAEGTER] START */}
-        <section id="vedtaegter" className="card h-full min-h-[84px]">
-          <details className="group">
+        {/* [HELP:ABOUT:SEC:TRAINING] START */}
+        <section className="card h-full min-h-[120px] lg:col-span-2">
+          <header className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <div className="kicker mb-1">
+                <span className="h-2 w-2 rounded-full bg-lime-500" />
+                TRÆNING &amp; PRØVETRÆNING
+              </div>
+              <h2 className="text-lg font-semibold">Træning i Humlum Dartklub</h2>
+            </div>
+            <button
+              onClick={() => setShowBooking(true)}
+              className="hidden sm:inline-flex items-center rounded-full border border-emerald-700 px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+            >
+              🎯 Book prøvetræning
+            </button>
+          </header>
+          <p className="text-sm text-gray-700 mb-2">
+            Vi starter med faste træningsaftener, hvor nye kan prøve kræfter med
+            darts i trygge rammer, og øvede kan arbejde målrettet med teknik og
+            mentalt fokus. Træningerne er opbygget med opvarmning, fokuserede
+            øvelser og afsluttende spil – så alle får noget med hjem.
+          </p>
+          <ul className="text-sm list-disc list-inside space-y-1 text-gray-700 mb-3">
+            <li>Fælles intro til regler, udstyr og god dartkultur.</li>
+            <li>Træningsøvelser med fokus på ro, rutine og gentagelse.</li>
+            <li>Små interne matcher og sociale formater.</li>
+          </ul>
+          <div className="mt-3 border-t pt-3 text-xs text-gray-600">
+            <div className="font-semibold mb-1">
+              Prøvetræning – sådan fungerer det
+            </div>
+            <p className="mb-2">
+              Du kan tilmelde dig en gratis prøvetræning via knappen herunder.
+              Så fordeler vi jer over de kommende træningsaftener, så der er god
+              plads ved banerne, og vi kan tage godt imod jer.
+            </p>
+            <button
+              onClick={() => setShowBooking(true)}
+              className="inline-flex items-center rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+            >
+              🎯 Book prøvetræning
+            </button>
+          </div>
+        </section>
+        {/* [HELP:ABOUT:SEC:TRAINING] END */}
+
+        {/* [HELP:ABOUT:SEC:BYLAWS] START — Vedtægter */}
+        <section
+          id="vedtaegter"
+          className="card h-full min-h-[120px] flex flex-col justify-between"
+        >
+          <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -215,210 +326,270 @@ export default function AboutPage() {
                   <span>VEDTÆGTER (OFFENTLIGT OVERBLIK)</span>
                   <span className="ml-2 text-xs text-emerald-800">📜</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
             <ul className="list-disc pl-5 text-sm text-gray-800 space-y-1">
-              <li><span className="font-semibold">Navn & hjemsted:</span> Humlum Dartklub, Struer Kommune.</li>
-              <li><span className="font-semibold">Formål:</span> Dart for alle – med Fællesskab & Præcision.</li>
-              <li><span className="font-semibold">Medlemskab:</span> Klub under DDU/DIF.</li>
-              <li><span className="font-semibold">Kontingent-princip:</span> Vedtages årligt på GF; kan differentieres.</li>
-              <li><span className="font-semibold">Generalforsamling:</span> Årlig; klubbens øverste myndighed.</li>
-              <li><span className="font-semibold">Regnskab:</span> Kalenderår; revideres og offentliggøres for medlemmer.</li>
+              <li>
+                <span className="font-semibold">Navn &amp; hjemsted:</span>{" "}
+                Humlum Dartklub, Struer Kommune.
+              </li>
+              <li>
+                <span className="font-semibold">Formål:</span> Dart for alle –
+                med Fællesskab &amp; Præcision.
+              </li>
+              <li>
+                <span className="font-semibold">Medlemskab:</span> Klub under
+                DDU/DIF.
+              </li>
+              <li>
+                <span className="font-semibold">Kontingent-princip:</span>{" "}
+                Vedtages årligt på GF; kan differentieres.
+              </li>
+              <li>
+                <span className="font-semibold">Generalforsamling:</span> Årlig;
+                klubbens øverste myndighed.
+              </li>
+              <li>
+                <span className="font-semibold">Regnskab:</span> Kalenderår;
+                revideres og offentliggøres for medlemmer.
+              </li>
             </ul>
             <details className="mt-4 group">
               <summary className="cursor-pointer select-none inline-flex items-center gap-2 text-sm underline text-emerald-700">
-                Vores linje & principper (fold ud)
-                <span className="opacity-60 text-xs">(klubprofil – ikke jura)</span>
+                Vores linje &amp; principper (fold ud)
+                <span className="opacity-60 text-xs">
+                  (klubprofil – ikke jura)
+                </span>
               </summary>
-              <div className="mt-3 border-t pt-3 text-sm leading-7 text-gray-800">
-                <ul className="list-disc pl-5 space-y-2">
-                  <li><span className="font-semibold">Fællesskab først:</span> Trygt, venligt og inkluderende miljø.</li>
-                  <li><span className="font-semibold">Præcision & udvikling:</span> Træning i øjenhøjde, tydelig progression.</li>
-                  <li><span className="font-semibold">Åben & ordentlig ledelse:</span> Demokrati og indblik i økonomi.</li>
-                  <li><span className="font-semibold">Inklusion:</span> Alle niveauer; junior trygge rammer.</li>
-                  <li><span className="font-semibold">Fairplay:</span> Respekt og god adfærd.</li>
-                  <li><span className="font-semibold">Sund økonomi:</span> Enkle takster og gennemsigtighed.</li>
-                </ul>
-                <div className="mt-4">
-                  <a
-                    href="mailto:humlumdartklub@gmail.com?subject=Anmodning om fulde vedt%C3%A6gter (PDF)"
-                    className="px-3 py-1.5 rounded-xl bg-black text-white hover:opacity-90"
-                  >
-                    Spørg om fulde vedtægter (PDF)
-                  </a>
-                </div>
-                <p className="mt-2 text-xs text-gray-600">Fuld juridisk version deles efter henvendelse.</p>
+              <div className="mt-2 text-xs text-gray-700 space-y-1">
+                <p>
+                  Vedtægterne skal være klare og forståelige – både for
+                  medlemmer og samarbejdspartnere. Vi vil løbende justere dem,
+                  så de følger klubbens udvikling, men altid med fokus på
+                  gennemsigtighed, ordentlighed og medlemsinddragelse.
+                </p>
+                <p>
+                  Når de endelige vedtægter er vedtaget på stiftende
+                  generalforsamling, lægger vi dem op som PDF her på siden.
+                </p>
               </div>
             </details>
-          </details>
-        </section>
-        {/* [HELP:ABOUT:SEC:VEDTAEGTER] END */}
-
-        {/* [HELP:ABOUT:SEC:HOLD] START */}
-        <section id="hold" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>HOLD & RÆKKER</span>
-                </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
-              </div>
-            </summary>
-            <p className="text-sm text-gray-700">
-              Vi spiller bredde først og bygger niveau op. Hold tilmeldes når vi er klar.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <span className="px-3 py-1 rounded-full border">Senior – Hverdag</span>
-              <span className="px-3 py-1 rounded-full border">Senior – Weekend</span>
-              <span className="px-3 py-1 rounded-full border">Damepairs</span>
-              <span className="px-3 py-1 rounded-full border">+35 / +50</span>
-              <span className="px-3 py-1 rounded-full border">Junior (U18)</span>
-            </div>
-            <div className="mt-3">
-              <Link href="/events" className="underline text-emerald-700 hover:text-emerald-800 text-sm">
-                Se kampe & arrangementer
+            <div className="mt-3 text-sm">
+              <Link
+                href="/docs/vedtaegter.pdf"
+                className="inline-flex items-center rounded-full border border-emerald-700 px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+              >
+                📜 Åbn vedtægter (PDF)
               </Link>
             </div>
           </details>
         </section>
-        {/* [HELP:ABOUT:SEC:HOLD] END */}
+        {/* [HELP:ABOUT:SEC:BYLAWS] END */}
 
-        {/* [HELP:ABOUT:SEC:VAERDIER] START */}
-        <section id="vaerdier" className="card h-full min-h-[84px]">
-          <details className="group">
+        {/* [HELP:ABOUT:SEC:TEAMS] START — Hold & rækker */}
+        <section
+          id="hold"
+          className="card h-full min-h-[120px] flex flex-col justify-between"
+        >
+          <details className="group" open>
+            <summary className="cursor-pointer list-none">
+              <div className="kicker mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-lime-500" />
+                  <span>HOLD &amp; RÆKKER</span>
+                </div>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
+              </div>
+            </summary>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Vi starter enkelt og bygger op over tid. Første skridt er at få
+                en solid træningskultur og interne aktiviteter. Næste skridt kan
+                være hold i lokale rækker og senere deltagelse i DDU-turneringer.
+              </p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Åben træning for alle niveauer.</li>
+                <li>Interne klubturneringer og sociale events.</li>
+                <li>Mulighed for at samle turneringshold på sigt.</li>
+              </ul>
+            </div>
+          </details>
+        </section>
+        {/* [HELP:ABOUT:SEC:TEAMS] END */}
+
+        {/* [HELP:ABOUT:SEC:VALUES] START — værdikort */}
+        <section
+          id="vaerdier"
+          className="card h-full min-h-[120px] flex flex-col justify-between"
+        >
+          <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>VÆRDIER</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
-            <ul className="mt-2 list-disc pl-5 text-sm text-gray-800">
-              {VALUES.map((v) => (
-                <li key={v.title}>
-                  <span className="font-semibold">{v.title}</span>: {v.text}
-                </li>
-              ))}
-            </ul>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Humlum Dartklub skal være et sted, hvor man både kan jagte
+                180&apos;ere og få et godt grin. Derfor arbejder vi efter nogle
+                få, men klare værdier:
+              </p>
+              <ul className="mt-2 text-sm text-gray-700 list-disc list-inside">
+                {VALUES.map((v) => (
+                  <li key={v.title}>
+                    <span className="font-semibold">{v.title}:</span> {v.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </details>
         </section>
-        {/* [HELP:ABOUT:SEC:VAERDIER] END */}
+        {/* [HELP:ABOUT:SEC:VALUES] END */}
 
-        {/* [HELP:ABOUT:SEC:BOARD] START */}
-        <section id="bestyrelse" className="card h-full min-h-[84px]">
-          <details className="group">
+        {/* [HELP:ABOUT:SEC:BOARD] START — bestyrelseskort */}
+        <section
+          id="bestyrelse"
+          className="card h-full min-h-[120px] flex flex-col justify-between lg:col-span-2"
+        >
+          <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>BESTYRELSE</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
-
-            <p className="text-sm text-gray-700 mb-4">Offentlig oversigt over roller og kontakt.</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 border-b border-lime-200/60">
-                    <th className="py-2 pr-4">Rolle</th>
-                    <th className="py-2 pr-4">Navn</th>
-                    <th className="py-2 pr-4">E-mail</th>
-                    <th className="py-2">Telefon</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {BOARD.map((m, i) => (
-                    <tr key={i} className="border-b last:border-b-0 border-lime-100">
-                      <td className="py-2 pr-4 font-medium text-gray-900">{m.role}</td>
-                      <td className="py-2 pr-4">{m.name}</td>
-                      <td className="py-2 pr-4">
-                        {m.email ? (
-                          <a href={`mailto:${m.email}`} className="underline text-emerald-700 hover:text-emerald-800">
-                            {m.email}
-                          </a>
-                        ) : (
-                          <span className="opacity-60">[mail]</span>
-                        )}
-                      </td>
-                      <td className="py-2">{m.phone || <span className="opacity-60">[+45 xx xx xx xx]</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="text-sm text-gray-700">
+              <p className="mb-2">
+                Når Humlum Dartklub er stiftet, offentliggør vi her den valgte
+                bestyrelse og kontaktinfo. Indtil da viser vi en skitse til en
+                typisk rollefordeling:
+              </p>
+              <dl className="mt-2 grid gap-2 text-sm text-gray-800 sm:grid-cols-2">
+                {BOARD.map((m) => (
+                  <div key={m.role} className="border rounded-xl px-3 py-2">
+                    <dt className="font-semibold">{m.role}</dt>
+                    <dd>{m.name}</dd>
+                    {m.email && (
+                      <dd className="text-xs text-emerald-800">
+                        <a
+                          href={`mailto:${m.email}`}
+                          className="underline"
+                        >
+                          {m.email}
+                        </a>
+                      </dd>
+                    )}
+                    {m.phone && (
+                      <dd className="text-xs text-emerald-800">
+                        <a
+                          href={`tel:${m.phone.replace(/\s+/g, "")}`}
+                          className="underline"
+                        >
+                          {m.phone}
+                        </a>
+                      </dd>
+                    )}
+                  </div>
+                ))}
+              </dl>
             </div>
           </details>
         </section>
         {/* [HELP:ABOUT:SEC:BOARD] END */}
 
-        {/* [HELP:ABOUT:SEC:DOCS] START */}
-        <section id="dokumenter" className="card h-full min-h-[84px]">
-          <details className="group">
+        {/* [HELP:ABOUT:SEC:DOCS] START — Dokumenter */}
+        <section
+          id="dokumenter"
+          className="card h-full min-h-[120px] flex flex-col justify-between"
+        >
+          <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>DOKUMENTER (OFFENTLIGE)</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
-            <ul className="text-sm text-gray-800 space-y-2">
-              <li><span className="opacity-60">Vedtægter (PDF) – internt; fås ved henvendelse.</span></li>
-              <li><Link href="/docs/privatlivspolitik.pdf" className="underline text-emerald-700 hover:text-emerald-800">Privatlivspolitik (PDF)</Link></li>
-              <li><Link href="/docs/ordensregler.pdf" className="underline text-emerald-700 hover:text-emerald-800">Ordensregler (PDF)</Link></li>
-            </ul>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Her samler vi centrale dokumenter for klubben, fx referat fra
+                stiftende generalforsamling, regnskab, årsberetning og andet
+                materiale, som medlemmerne skal kunne finde.
+              </p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Stiftende generalforsamling – referat (kommer senere)</li>
+                <li>Regnskab og budget (kommer senere)</li>
+                <li>Årsberetning (kommer senere)</li>
+              </ul>
+            </div>
           </details>
         </section>
         {/* [HELP:ABOUT:SEC:DOCS] END */}
 
-        {/* [HELP:ABOUT:SEC:MAP] START */}
-        <section id="find-os" className="card h-full min-h-[84px]">
-          <details className="group">
+        {/* [HELP:ABOUT:SEC:MAP] START — Find os */}
+        <section
+          id="find-os"
+          className="card h-full min-h-[120px] flex flex-col justify-between"
+        >
+          <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>FIND OS (KORT & PARKERING)</span>
+                  <span>FIND OS (KORT &amp; PARKERING)</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
-            <dl className="text-sm text-gray-800 space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <dt className="col-span-1 font-semibold">Adresse</dt>
-                <dd className="col-span-2">[Tilføj adresse her]</dd>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <dt className="col-span-1 font-semibold">Parkering</dt>
-                <dd className="col-span-2">Gratis parkering ved indgangen efter kl. 17. Husk opmærkning.</dd>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <dt className="col-span-1 font-semibold">Kort</dt>
-                <dd className="col-span-2">
-                  <a
-                    href="https://maps.google.com/?q=[Din+adresse]"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline text-emerald-700 hover:text-emerald-800"
-                  >
-                    Åbn Google Maps (nyt vindue)
-                  </a>
-                </dd>
-              </div>
-            </dl>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Humlum Dartklub får hjemmebane i et lokale, hvor der er plads
+                til baner, ophold og ordentlig belysning. Vi publicerer den
+                præcise adresse og parkeringsmuligheder, så snart lejeaftalen er
+                på plads.
+              </p>
+              <dl className="mt-2 text-sm text-gray-800">
+                <div>
+                  <dt className="font-semibold">Adresse</dt>
+                  <dd>[Adresse kommer]</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold mt-1">Parkering</dt>
+                  <dd>[Info om parkering kommer]</dd>
+                </div>
+              </dl>
+            </div>
           </details>
         </section>
         {/* [HELP:ABOUT:SEC:MAP] END */}
 
         {/* [HELP:ABOUT:SEC:CONTACT] START */}
-        <section id="kontakt" className="card h-full min-h-[84px] md:col-span-2 lg:col-span-3">
+        <section
+          id="kontakt"
+          className="card h-full min-h-[84px] md:col-span-2 lg:col-span-3"
+        >
           <details className="group" open>
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
@@ -426,19 +597,27 @@ export default function AboutPage() {
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>KONTAKT OS</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
             <div className="grid gap-3 md:grid-cols-3 text-sm text-gray-800">
               <div className="border rounded-xl p-3">
                 <div className="font-semibold mb-1">Mail</div>
-                <a href="mailto:humlumdartklub@gmail.com" className="underline text-emerald-700 hover:text-emerald-800">
+                <a
+                  href="mailto:humlumdartklub@gmail.com"
+                  className="underline text-emerald-700 hover:text-emerald-800"
+                >
                   humlumdartklub@gmail.com
                 </a>
               </div>
               <div className="border rounded-xl p-3">
                 <div className="font-semibold mb-1">Telefon</div>
-                <a href="tel:+45XXXXXXXX" className="underline text-emerald-700 hover:text-emerald-800">
+                <a
+                  href="tel:+45XXXXXXXX"
+                  className="underline text-emerald-700 hover:text-emerald-800"
+                >
                   +45 xx xx xx xx
                 </a>
               </div>
@@ -462,77 +641,133 @@ export default function AboutPage() {
 
       {/* [HELP:ABOUT:MODAL] START — modal: Book prøvetræning */}
       {showBooking && (
-        <div className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm flex items-start justify-center p-4" onClick={() => setShowBooking(false)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl border" onClick={(e)=>e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm flex items-start justify-center p-4"
+          onClick={() => setShowBooking(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl border"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">🎯 Book prøvetræning</h3>
-              <button className="px-2 py-1 rounded-lg border hover:bg-gray-50" onClick={()=>setShowBooking(false)}>Luk</button>
-            </div>
-
-            {/* [HELP:ABOUT:MODAL:SLOTS] START — one-liner slots */}
-            <div>
-              <div className="kicker mb-2">
-                <span className="h-2 w-2 rounded-full bg-lime-500" /> Vælg dato & tid
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                {slots.map((s, idx) => {
-                  const active = s.isoDate === selectedDate && s.time === selectedTime;
-                  return (
-                    <button
-                      key={`${s.isoDate}-${s.time}-${idx}`}
-                      onClick={() => { setSelectedDate(s.isoDate); setSelectedTime(s.time); }}
-                      className={`px-3 py-2 rounded-xl border text-sm text-left ${active ? "bg-emerald-600 text-white" : "hover:bg-gray-50"}`}
-                    >
-                      {s.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {/* [HELP:ABOUT:MODAL:SLOTS] END */}
-
-            {/* [HELP:ABOUT:MODAL:FORM] START — formularfelter */}
-            <div className="mt-4 grid md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium">Navn</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={name} onChange={e=>setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">E-mail</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={email} onChange={e=>setEmail(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Telefon (valgfri)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={phone} onChange={e=>setPhone(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Bemærkning (valgfri)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={note} onChange={e=>setNote(e.target.value)} />
-              </div>
-            </div>
-            {/* [HELP:ABOUT:MODAL:FORM] END */}
-
-            {msg && (
-              <p className={`mt-3 text-sm ${msg.includes("Tak!") ? "text-emerald-700" : "text-red-600"}`}>
-                {msg}
-              </p>
-            )}
-
-            {/* [HELP:ABOUT:MODAL:CTA] START — knapper */}
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="px-3 py-1.5 rounded-xl bg-white border hover:bg-gray-50" onClick={()=>setShowBooking(false)}>Annullér</button>
+              <h3 className="text-lg font-semibold">
+                Book prøvetræning i Humlum Dartklub
+              </h3>
               <button
-                onClick={submitBooking}
-                disabled={busy || !name || !email || !selectedDate || !selectedTime}
-                className="px-4 py-1.5 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60"
+                onClick={() => setShowBooking(false)}
+                className="text-sm text-gray-500 hover:text-gray-800"
               >
-                {busy ? "Gemmer…" : "Book gratis prøvetræning"}
+                Luk ✕
               </button>
             </div>
-            {/* [HELP:ABOUT:MODAL:CTA] END */}
+
+            <p className="text-sm text-gray-700 mb-3">
+              Udfyld formularen herunder, så fordeler vi jer på en af de
+              kommende træningsaftener. Du får en bekræftelse pr. mail, når vi
+              har registreret din tilmelding.
+            </p>
+
+            {msg && (
+              <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {msg}
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-2 text-sm">
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    Navn *
+                  </label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    E-mail *
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    Telefon
+                  </label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    Foretrukken dato *
+                  </label>
+                  <select
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  >
+                    <option value="">Vælg dato…</option>
+                    {slots.map((s) => (
+                      <option key={s.isoDate} value={s.isoDate}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    Tidspunkt *
+                  </label>
+                  <select
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  >
+                    <option value="">Vælg tidspunkt…</option>
+                    <option value="18:30">18:30</option>
+                    <option value="19:00">19:00</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">
+                    Bemærkning
+                  </label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border px-2 py-1 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-2 text-xs text-gray-600">
+              <span>Felter markeret med * skal udfyldes.</span>
+              <button
+                onClick={submitBooking}
+                disabled={busy}
+                className="inline-flex items-center rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+              >
+                {busy ? "Sender…" : "Send tilmelding"}
+              </button>
+            </div>
 
             <p className="mt-2 text-xs text-gray-600">
-              Gratis og uforpligtende. Vi bekræfter på e-mail. (Ændr frekvens i koden ved <code>INTERVAL_WEEKS</code>.)
+              Gratis og uforpligtende. Vi bekræfter på e-mail. (Ændr frekvens i
+              koden ved <code>INTERVAL_WEEKS</code>.)
             </p>
           </div>
         </div>

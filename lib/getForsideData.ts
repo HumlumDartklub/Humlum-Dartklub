@@ -63,27 +63,41 @@ function apiUrl(tab: string): string {
 export async function getForsideData(): Promise<{ map: SheetMap; updated?: string }> {
   const map: SheetMap = {};
 
+  // Forside / hero / kort
   const forside = await safeJson<SheetApiResponse>(apiUrl("FORSIDE"));
   map.FORSIDE = pickArray(forside);
 
+  // Nyheder
   const nyheder = await safeJson<SheetApiResponse>(apiUrl("NYHEDER"));
   map.NYHEDER = pickArray(nyheder);
 
+  // Ticker
   const ticker = await safeJson<SheetApiResponse>(apiUrl("TICKER"));
-  map.TICKER = pickArray(ticker).map((r: any) => ({
-    message: r?.message ?? "",
-    title: r?.title ?? "",
-    pin: r?.pin ?? "",
-    date: r?.date ?? "",
-    order: Number(r?.order ?? 0),
-    start_on: r?.start_on ?? "",
-    end_on: r?.end_on ?? "",
-    channel: r?.channel ?? ""
-  })).filter((r: any) => String(r.message || "").trim() !== "");
+  map.TICKER = pickArray(ticker)
+    .map((r: any) => ({
+      message: r?.message ?? "",
+      title: r?.title ?? "",
+      pin: r?.pin ?? "",
+      date: r?.date ?? "",
+      order: Number(r?.order ?? 0),
+      start_on: r?.start_on ?? "",
+      end_on: r?.end_on ?? "",
+      channel: r?.channel ?? "",
+    }))
+    .filter((r: any) => String(r.message || "").trim() !== "");
 
-  const updated = (forside as any)?.updated || (nyheder as any)?.updated || (ticker as any)?.updated;
+  // KLUBINFO – key/value-konfiguration (navn, tagline, kontakt, SoMe)
+  const klubinfo = await safeJson<SheetApiResponse>(apiUrl("KLUBINFO"));
+  map.KLUBINFO = pickArray(klubinfo);
+
+  const updated =
+    (forside as any)?.updated ||
+    (nyheder as any)?.updated ||
+    (ticker as any)?.updated ||
+    (klubinfo as any)?.updated;
 
   return { map, updated };
 }
 
 export default getForsideData;
+
