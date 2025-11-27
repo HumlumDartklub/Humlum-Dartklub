@@ -52,7 +52,12 @@ const PLANS: Plan[] = [
     pakke: "Basis",
     audience: "Voksen",
     pris_pr_mdr: 99,
-    features: ["Fri træning", "Klub adgang", "Social events", "Facebook gruppe"],
+    features: [
+      "Fri træning",
+      "Klub adgang",
+      "Social events",
+      "Facebook gruppe",
+    ],
   },
   {
     key: "aktiv",
@@ -132,15 +137,13 @@ type FamMember = { first: string; last: string; year: string };
 
 export default function BlivMedlem() {
   /** [HELP:STATE:PLAN] START — valgt pakke + afledt plan-objekt */
-  const [plans, setPlans] = useState<Plan[]>(PLANS);
+  const [plans, setPlans] = useState<Plan[] | null>(null);
   const [selectedKey, setSelectedKey] = useState<PlanKey>("basis");
-  const plan = useMemo(
-    () =>
-      plans.find((p) => p.key === selectedKey) ??
-      plans[0] ??
-      PLANS[0],
-    [plans, selectedKey]
-  );
+  const plan = useMemo(() => {
+    const src = plans && plans.length > 0 ? plans : PLANS;
+    const found = src.find((p) => p.key === selectedKey);
+    return found ?? src[0];
+  }, [plans, selectedKey]);
   /** [HELP:STATE:PLAN] END */
 
   /** [HELP:STATE:SHEETSYNC] START — hent MEDLEMSPAKKER fra Sheet v3 */
@@ -161,9 +164,7 @@ export default function BlivMedlem() {
         const mapped: { plan: Plan; order: number }[] = [];
 
         for (const row of rows) {
-          const visible = String(
-            row.visible ?? row.Visible ?? ""
-          )
+          const visible = String(row.visible ?? row.Visible ?? "")
             .trim()
             .toUpperCase();
           if (visible && visible !== "YES") continue;
@@ -173,9 +174,7 @@ export default function BlivMedlem() {
             .toLowerCase();
           let key = PLAN_KEYS.find((k) => k === rawKey);
 
-          const titleRaw = String(
-            row.package_title ?? row.title ?? ""
-          )
+          const titleRaw = String(row.package_title ?? row.title ?? "")
             .trim()
             .toLowerCase();
           if (!key && titleRaw) {
@@ -232,8 +231,7 @@ export default function BlivMedlem() {
             row.badge_label ?? row.ribbon_label ?? fallback?.badge ?? "";
           const badge = String(badgeRaw).trim() || undefined;
 
-          const order =
-            Number(row.order ?? row.sort ?? row.idx ?? 0) || 0;
+          const order = Number(row.order ?? row.sort ?? row.idx ?? 0) || 0;
 
           mapped.push({
             plan: { key, pakke, audience, pris_pr_mdr, features, badge },
@@ -400,7 +398,7 @@ export default function BlivMedlem() {
   /** [HELP:FORM:SUBMIT] END */
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* HEADER */}
       <div className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
         <div className="inline-flex items-center gap-2 text-sm">
@@ -417,358 +415,363 @@ export default function BlivMedlem() {
 
       {/* PLAN-CARDS */}
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((p) => (
-          <article
-            key={p.key}
-            className={`relative flex h-full flex-col rounded-2xl border p-4 shadow-sm ${
-              p.key === selectedKey
-                ? "border-emerald-400"
-                : "border-lime-300 hover:border-emerald-400 transition"
-            }`}
-          >
-            {p.badge && (
-              <div className="absolute -top-3 -right-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
-                {p.badge}
-              </div>
-            )}
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs text-black">
-              {p.pakke}
-            </div>
-            <p className="text-sm text-slate-600">{p.audience}</p>
-            <p className="mt-1 text-3xl font-extrabold text-emerald-700">
-              {p.pris_pr_mdr} kr/md.
-            </p>
-            <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 flex-1">
-              {p.features.map((f, i) => (
-                <li key={i}>{f}</li>
-              ))}
-            </ul>
-            <div className="mt-auto pt-3">
-              <button
-                onClick={() => onChoosePlan(p.key)}
-                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-90"
-              >
-                Vælg {p.pakke}
-              </button>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      {/* FORM */}
-      <section ref={formRef} className="mt-10">
-        <div className="rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
-          <div className="mb-2 inline-flex items-center gap-2 text-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span>Tilmelding</span>
-          </div>
-          <h2 className="text-2xl font-extrabold">Pakke: {plan.pakke}</h2>
-          <p className="text-sm opacity-70">
-            Pris: <b>{prisMdr} kr/md</b> (fast pris
-            {plan.key === "familie" ? " for hele husstanden" : ""}).
-          </p>
-
-          {/* Niveau / køn / husstand */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div>
-              <label className="text-sm font-medium">Niveau</label>
-              <select
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={niveau}
-                onChange={(e) => setNiveau(e.target.value as any)}
-              >
-                {NIVEAUER.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium block">Køn</label>
-              <div className="mt-1 inline-flex gap-2">
-                {KOEN.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKoen(k)}
-                    className={`px-3 py-2 rounded-xl border text-sm ${
-                      koen === k
-                        ? "bg-emerald-600 text-white"
-                        : "hover:bg-gray-50"
-                    }`}
-                  >
-                    {k}
-                  </button>
-                ))}
-                {plan.key === "familie" && (
-                  <div className="ml-2">
-                    <label className="sr-only">Husstand</label>
-                    <select
-                      className="rounded-xl border px-3 py-2 text-sm"
-                      value={husstand}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        setHusstand(n);
-                        syncFamCount(n);
-                      }}
-                      title="Antal i husstanden"
-                    >
-                      {[2, 3, 4, 5, 6].map((n) => (
-                        <option key={n} value={n}>
-                          {n} personer
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div aria-hidden />
-          </div>
-
-          {/* Navn + fødselsår */}
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div>
-              <label className="text-sm font-medium">Fornavn</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={fornavn}
-                onChange={(e) => setFornavn(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Efternavn</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={efternavn}
-                onChange={(e) => setEfternavn(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Fødselsår</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                placeholder="YYYY"
-                value={birth}
-                onChange={(e) => setBirth(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Email / telefon */}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium">E-mail</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Telefon</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={telefon}
-                onChange={(e) => setTelefon(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Adresse */}
-          <div className="mt-3">
-            <label className="text-sm font-medium">Adresse</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={adresse}
-              onChange={(e) => setAdresse(e.target.value)}
-            />
-          </div>
-
-          {/* Postnr / by */}
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div>
-              <label className="text-sm font-medium">Postnr</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                list="zip-suggestions"
-                value={zip}
-                onChange={(e) =>
-                  onZipChange(
-                    e.target.value.replace(/\D/g, "").slice(0, 4)
-                  )
-                }
-                placeholder="f.eks. 7600"
-              />
-              <datalist id="zip-suggestions">
-                {ZIP_SUGGESTIONS.map((z) => (
-                  <option key={z} value={z}>
-                    {z} {ZIP_TO_CITY[z]}
-                  </option>
-                ))}
-              </datalist>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-sm font-medium">By</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={by}
-                onChange={(e) => setBy(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Bemærkning */}
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => setNoteOpen((v) => !v)}
-              className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-              aria-expanded={noteOpen}
-            >
-              Bemærkning (valgfri)
-            </button>
-            {noteOpen && (
-              <div className="mt-2">
-                <label className="sr-only">Bemærkning (valgfri)</label>
-                <textarea
-                  className="w-full rounded-xl border px-3 py-2"
-                  rows={3}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Familie-udvidelse */}
-          {plan.key === "familie" && fam.length > 0 && (
-            <div className="mt-6 rounded-2xl border border-lime-300 bg-white p-4">
-              <div className="font-semibold mb-3">
-                Ekstra familiemedlemmer
-              </div>
-              <div className="grid gap-3">
-                {fam.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className="grid gap-3 sm:grid-cols-3"
-                  >
-                    <div>
-                      <label className="text-sm font-medium">
-                        Fornavn #{idx + 2}
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-xl border px-3 py-2"
-                        value={m.first}
-                        onChange={(e) =>
-                          setFam((cur) =>
-                            cur.map((x, i) =>
-                              i === idx
-                                ? { ...x, first: e.target.value }
-                                : x
-                            )
-                          )
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">
-                        Efternavn
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-xl border px-3 py-2"
-                        value={m.last}
-                        onChange={(e) =>
-                          setFam((cur) =>
-                            cur.map((x, i) =>
-                              i === idx
-                                ? { ...x, last: e.target.value }
-                                : x
-                            )
-                          )
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">
-                        Fødselsår
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-xl border px-3 py-2"
-                        placeholder="YYYY"
-                        value={m.year}
-                        onChange={(e) =>
-                          setFam((cur) =>
-                            cur.map((x, i) =>
-                              i === idx
-                                ? { ...x, year: e.target.value }
-                                : x
-                            )
-                          )
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Accept + CTA */}
-          <div className="mt-2 grid items-center gap-3 sm:grid-cols-[auto,1fr,auto]">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={terms}
-                onChange={(e) => setTerms(e.target.checked)}
-              />
-              <span className="text-sm">
-                Jeg har læst og accepterer{" "}
-                <Link
-                  href="/docs/vedtaegter.pdf"
-                  className="underline"
-                  target="_blank"
-                >
-                  Vedtægter
-                </Link>{" "}
-                og{" "}
-                <Link href="/privatliv" className="underline">
-                  Privatlivspolitik
-                </Link>
-                .
-              </span>
-            </label>
-            <div aria-hidden />
-            <div className="flex justify-end">
-              <button
-                onClick={goToPayment}
-                disabled={busy}
-                className={`rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 ${
-                  isValid ? "bg-emerald-600" : "bg-black"
-                }`}
-              >
-                {busy ? "Sender…" : "Fortsæt til betaling"}
-              </button>
-            </div>
-          </div>
-
-          {msg && (
-            <p
-              className={`mt-3 text-sm ${
-                msg.startsWith("Udfyld") || msg.startsWith("Du skal")
-                  ? "text-red-600"
-                  : "text-emerald-700"
+        {plans ? (
+          plans.map((p) => (
+            <article
+              key={p.key}
+              className={`relative flex h-full flex-col rounded-2xl border p-4 shadow-sm ${
+                p.key === selectedKey
+                  ? "border-emerald-400"
+                  : "border-lime-300 transition hover:border-emerald-400"
               }`}
             >
-              {msg}
-            </p>
-          )}
-        </div>
+              {p.badge && (
+                <div className="absolute -right-3 -top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
+                  {p.badge}
+                </div>
+              )}
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs text-black">
+                {p.pakke}
+              </div>
+              <p className="text-sm text-slate-600">{p.audience}</p>
+              <p className="mt-1 text-3xl font-extrabold text-emerald-700">
+                {p.pris_pr_mdr} kr/md.
+              </p>
+              <ul className="mt-3 flex-1 list-disc pl-5 text-sm text-gray-700">
+                {p.features.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+              <div className="mt-auto pt-3">
+                <button
+                  onClick={() => onChoosePlan(p.key)}
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-90"
+                >
+                  Vælg {p.pakke}
+                </button>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="sm:col-span-2 lg:col-span-3 text-sm text-neutral-600">
+            Vi indlæser medlems-pakkerne fra systemet… et øjeblik.
+          </div>
+        )}
       </section>
+
+      {/* FORM – kun når vi har pakker klar */}
+      {plans && (
+        <section ref={formRef} className="mt-10">
+          <div className="rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span>Tilmelding</span>
+            </div>
+            <h2 className="text-2xl font-extrabold">Pakke: {plan.pakke}</h2>
+            <p className="text-sm opacity-70">
+              Pris: <b>{prisMdr} kr/md</b> (fast pris
+              {plan.key === "familie" ? " for hele husstanden" : ""}).
+            </p>
+
+            {/* Niveau / køn / husstand */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-sm font-medium">Niveau</label>
+                <select
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={niveau}
+                  onChange={(e) => setNiveau(e.target.value as any)}
+                >
+                  {NIVEAUER.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium">Køn</label>
+                <div className="mt-1 inline-flex gap-2">
+                  {KOEN.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setKoen(k)}
+                      className={`rounded-xl border px-3 py-2 text-sm ${
+                        koen === k
+                          ? "bg-emerald-600 text-white"
+                          : "hover:bg-gray-50"
+                      }`}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                  {plan.key === "familie" && (
+                    <div className="ml-2">
+                      <label className="sr-only">Husstand</label>
+                      <select
+                        className="rounded-xl border px-3 py-2 text-sm"
+                        value={husstand}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          setHusstand(n);
+                          syncFamCount(n);
+                        }}
+                        title="Antal i husstanden"
+                      >
+                        {[2, 3, 4, 5, 6].map((n) => (
+                          <option key={n} value={n}>
+                            {n} personer
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div aria-hidden />
+            </div>
+
+            {/* Navn + fødselsår */}
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-sm font-medium">Fornavn</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={fornavn}
+                  onChange={(e) => setFornavn(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Efternavn</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={efternavn}
+                  onChange={(e) => setEfternavn(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fødselsår</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="YYYY"
+                  value={birth}
+                  onChange={(e) => setBirth(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Email / telefon */}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium">E-mail</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Telefon</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={telefon}
+                  onChange={(e) => setTelefon(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Adresse */}
+            <div className="mt-3">
+              <label className="text-sm font-medium">Adresse</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={adresse}
+                onChange={(e) => setAdresse(e.target.value)}
+              />
+            </div>
+
+            {/* Postnr / by */}
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-sm font-medium">Postnr</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  list="zip-suggestions"
+                  value={zip}
+                  onChange={(e) =>
+                    onZipChange(
+                      e.target.value.replace(/\D/g, "").slice(0, 4)
+                    )
+                  }
+                  placeholder="f.eks. 7600"
+                />
+                <datalist id="zip-suggestions">
+                  {ZIP_SUGGESTIONS.map((z) => (
+                    <option key={z} value={z}>
+                      {z} {ZIP_TO_CITY[z]}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">By</label>
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={by}
+                  onChange={(e) => setBy(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Bemærkning */}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setNoteOpen((v) => !v)}
+                className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
+                aria-expanded={noteOpen}
+              >
+                Bemærkning (valgfri)
+              </button>
+              {noteOpen && (
+                <div className="mt-2">
+                  <label className="sr-only">Bemærkning (valgfri)</label>
+                  <textarea
+                    className="w-full rounded-xl border px-3 py-2"
+                    rows={3}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Familie-udvidelse */}
+            {plan.key === "familie" && fam.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-lime-300 bg-white p-4">
+                <div className="mb-3 font-semibold">
+                  Ekstra familiemedlemmer
+                </div>
+                <div className="grid gap-3">
+                  {fam.map((m, idx) => (
+                    <div key={idx} className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="text-sm font-medium">
+                          Fornavn #{idx + 2}
+                        </label>
+                        <input
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          value={m.first}
+                          onChange={(e) =>
+                            setFam((cur) =>
+                              cur.map((x, i) =>
+                                i === idx
+                                  ? { ...x, first: e.target.value }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">
+                          Efternavn
+                        </label>
+                        <input
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          value={m.last}
+                          onChange={(e) =>
+                            setFam((cur) =>
+                              cur.map((x, i) =>
+                                i === idx
+                                  ? { ...x, last: e.target.value }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">
+                          Fødselsår
+                        </label>
+                        <input
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          placeholder="YYYY"
+                          value={m.year}
+                          onChange={(e) =>
+                            setFam((cur) =>
+                              cur.map((x, i) =>
+                                i === idx
+                                  ? { ...x, year: e.target.value }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Accept + CTA */}
+            <div className="mt-2 grid items-center gap-3 sm:grid-cols-[auto,1fr,auto]">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={terms}
+                  onChange={(e) => setTerms(e.target.checked)}
+                />
+                <span className="text-sm">
+                  Jeg har læst og accepterer{" "}
+                  <Link
+                    href="/docs/vedtaegter.pdf"
+                    className="underline"
+                    target="_blank"
+                  >
+                    Vedtægter
+                  </Link>{" "}
+                  og{" "}
+                  <Link href="/privatliv" className="underline" target="_blank">
+                    Privatlivspolitik
+                  </Link>
+                  .
+                </span>
+              </label>
+              <div aria-hidden />
+              <div className="flex justify-end">
+                <button
+                  onClick={goToPayment}
+                  disabled={busy}
+                  className={`rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 ${
+                    isValid ? "bg-emerald-600" : "bg-black"
+                  }`}
+                >
+                  {busy ? "Sender…" : "Fortsæt til betaling"}
+                </button>
+              </div>
+            </div>
+
+            {msg && (
+              <p
+                className={`mt-3 text-sm ${
+                  msg.startsWith("Udfyld") || msg.startsWith("Du skal")
+                    ? "text-red-600"
+                    : "text-emerald-700"
+                }`}
+              >
+                {msg}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
