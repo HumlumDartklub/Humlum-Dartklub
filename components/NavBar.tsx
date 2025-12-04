@@ -2,6 +2,7 @@
 
 /* [HELP:NAV:IMPORTS] START */
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 /* [HELP:NAV:IMPORTS] END */
 
@@ -17,10 +18,25 @@ export default function NavBar() {
         {/* [HELP:NAV:BRAND] START — logo/brand (link til forside) */}
         <Link
           href="/"
-          className="font-bold hover:opacity-80"
+          className="flex items-center gap-3 hover:opacity-90"
           aria-label="Gå til forsiden"
         >
-          Humlum Dartklub
+          <div className="relative h-14 w-14 sm:h-20 sm:w-20">
+            <Image
+              src="/images/logo/humlum-logo.png"
+              alt="Humlum Dartklub logo"
+              fill
+              sizes="(min-width: 1024px) 5rem, (min-width: 640px) 4rem, 3.5rem"
+              className="object-contain drop-shadow-sm"
+              priority
+            />
+          </div>
+          <span className="hidden text-base font-semibold leading-tight sm:inline">
+            Humlum Dartklub
+            <span className="block text-xs font-normal text-neutral-500">
+              Fællesskab &amp; Præcision
+            </span>
+          </span>
         </Link>
         {/* [HELP:NAV:BRAND] END */}
 
@@ -70,7 +86,10 @@ export default function NavBar() {
       </nav>
 
       {/* [HELP:NAV:MOBILE:PANEL] START — mobil dropdown-panel */}
-      <div id="mobile-menu" className={`md:hidden ${open ? "block" : "hidden"}`}>
+      <div
+        id="mobile-menu"
+        className={`md:hidden ${open ? "block" : "hidden"}`}
+      >
         <div className="mx-auto max-w-7xl px-4 pb-3 sm:px-6 lg:px-8">
           <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
             <div className="flex flex-col divide-y">
@@ -109,7 +128,6 @@ export default function NavBar() {
               >
                 Humlum Dart Academy
               </Link>
-
               <Link
                 className="px-4 py-3 text-xs text-neutral-500 hover:bg-gray-50"
                 href="/admin/login"
@@ -117,11 +135,10 @@ export default function NavBar() {
               >
                 Bestyrelseslogin
               </Link>
-
               <Link
+                className="m-3 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-white hover:opacity-90"
                 href="/bliv-medlem"
                 onClick={() => setOpen(false)}
-                className="m-3 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-white hover:opacity-90"
               >
                 Bliv medlem
               </Link>
