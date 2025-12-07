@@ -50,7 +50,9 @@ export default function Page() {
       : ({} as Record<string, string>);
 
   const clubName = klubinfoMap["club.name"] || "Humlum Dartklub";
-  const clubTagline = klubinfoMap["club.tagline"] || "Fællesskab & Præcision";
+const clubTagline = klubinfoMap["club.tagline"] || "Fællesskab & Præcision";
+const clubFoundedYear = klubinfoMap["club.founded_year"] || "";
+
 
   const heroTitle = d?.hero?.title || clubName || "Humlum Dartklub";
   const heroSub = d?.hero?.subtitle || clubTagline || "Fællesskab & Præcision";
@@ -172,16 +174,32 @@ export default function Page() {
             INFO & LINKS
           </div>
 
-          <h2 className="section-title">Nyttige links</h2>
-          <div className="section-underline" />
+          {/* NOTE: Fjernet dobbelt "Nyttige links"-titel for at undgå gentagelser */}
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="font-semibold">Forening</h4>
+              <h4 className="font-semibold">Humlum Dartklub</h4>
               <ul className="mt-1 text-sm opacity-80">
-                <li>{clubName}</li>
-                <li>{clubTagline}</li>
-              </ul>
+  {loading ? (
+    <li>Henter klubinfo…</li>
+  ) : (
+    <>
+      <li>{clubTagline}</li>
+      <li>{clubFoundedYear ? `Stiftet ${clubFoundedYear}` : clubName}</li>
+      <li>
+        <a
+          href="https://www.facebook.com/profile.php?id=61584636756670"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:opacity-80"
+        >
+          📘 Facebook
+        </a>
+      </li>
+    </>
+  )}
+</ul>
+
             </div>
 
             <div>
@@ -207,6 +225,27 @@ export default function Page() {
                     Dansk Dart Union (DDU)
                   </a>
                 </li>
+<li>
+  <a
+    href="https://www.dif.dk/"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="underline hover:opacity-80"
+  >
+    Danmarks Idrætsforbund (DIF)
+  </a>
+</li>
+<li>
+  <a
+    href="https://sponsorworld.dk/"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="underline hover:opacity-80"
+  >
+    SponsorWorld
+  </a>
+</li>
+
               </ul>
             </div>
           </div>
