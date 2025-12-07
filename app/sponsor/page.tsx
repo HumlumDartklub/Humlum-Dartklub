@@ -3,11 +3,12 @@
 /* [HELP:SPONSOR:IMPORTS] START
  * Pitch: Importer brugt af sponsorsiden. Tilføj her hvis du får brug for mere.
  * [HELP:SPONSOR:IMPORTS] END */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /* [HELP:SPONSOR:CONFIG] START
  * Pitch: Grundkonstanter og links du kan tilpasse uden at røre UI.
  * [HELP:SPONSOR:CONFIG] END */
+
 /* [HELP:SPONSOR:CONFIG:LIMITS] START — Min/max for ét-klik beløb */
 const CLICK_MIN = 25;
 const CLICK_MAX = 100_000;
@@ -17,10 +18,34 @@ const CLICK_MAX = 100_000;
 const SPONSOR_FORM_HREF = "/sponsor/tilmelding"; // <- juster hvis du har en anden sti
 /* [HELP:SPONSOR:FORM:LINK] END */
 
+/* [HELP:SPONSOR:SHEET:CONFIG] START — læs sponsorpakker fra HDK_Admin_v3 */
+const SHEET_KEY = "hdk-admin-dev";
+const SHEET_TAB_SPONSOR = "SPONSORPAKKER";
+
+type SheetRow = { [key: string]: any };
+
+interface ApiListResponse {
+  ok: boolean;
+  items?: SheetRow[];
+  error?: string;
+  message?: string;
+  tab?: string;
+}
+
+function normalizeString(value: any): string {
+  return String(value ?? "").trim();
+}
+
+function isTruthyYes(value: any): boolean {
+  const v = normalizeString(value).toUpperCase();
+  return v === "YES" || v === "TRUE" || v === "1";
+}
+/* [HELP:SPONSOR:SHEET:CONFIG] END */
+
 /* [HELP:SPONSOR:TYPES] START
  * Pitch: Typer til pakker og tilkøb.
  * [HELP:SPONSOR:TYPES] END */
-type PackageKey = "bronze" | "silver" | "gold";
+type PackageKey = string; // dynamisk, kommer fra sheet (package_key/key)
 type Package = {
   key: PackageKey;
   name: string;
@@ -28,6 +53,9 @@ type Package = {
   priceYear: number;
   badge?: string;
   features: string[];
+  priceUnit?: string;
+  subtitle?: string;
+  featured?: boolean;
 };
 
 type AddOnKey = "youth" | "events" | "gear";
@@ -41,12 +69,10 @@ type AddOn = {
   hint?: string;
 };
 
-/* [HELP:SPONSOR:PACKAGES:DATA] START
- * Pitch: Sponsor-pakker. Ret navn/ikon/pris/features her.
- * Brug under-ankrene hvis du kun ændrer én pakke.
- * [HELP:SPONSOR:PACKAGES:DATA] END */
-const PACKAGES: Package[] = [
-  /* [HELP:SPONSOR:PACKAGES:BRONZE] START — Bronze */
+/* [HELP:SPONSOR:PACKAGES:FALLBACK] START
+ * Pitch: Fallback hvis Sheet ikke kan læses (bruges kun ved fejl).
+ * [HELP:SPONSOR:PACKAGES:FALLBACK] END */
+const FALLBACK_PACKAGES: Package[] = [
   {
     key: "bronze",
     name: "Bronze",
@@ -58,9 +84,6 @@ const PACKAGES: Package[] = [
       "Klubcertifikat til butik/kontor",
     ],
   },
-  /* [HELP:SPONSOR:PACKAGES:BRONZE] END */
-
-  /* [HELP:SPONSOR:PACKAGES:SILVER] START — Sølv */
   {
     key: "silver",
     name: "Sølv",
@@ -74,9 +97,6 @@ const PACKAGES: Package[] = [
       "Tak i SoMe 2× årligt",
     ],
   },
-  /* [HELP:SPONSOR:PACKAGES:SILVER] END */
-
-  /* [HELP:SPONSOR:PACKAGES:GOLD] START — Guld */
   {
     key: "gold",
     name: "Guld",
@@ -85,18 +105,17 @@ const PACKAGES: Package[] = [
     features: [
       "Alt i Sølv",
       "Logo på træningstrøjer (ærme)",
-      "Årlig firma-dart aften (2 timer)",
+      "Årlig firma-dart aften (3 timer)",
       "Profil på sponsorvæg + link",
     ],
   },
-  /* [HELP:SPONSOR:PACKAGES:GOLD] END */
 ];
 
 /* [HELP:SPONSOR:ADDONS:DATA] START
  * Pitch: Tilkøb. Ret navn/ikon/priser/hint her.
+ * (KAN senere gøres Sheet-styret fra SPONSOR_TILKOEB.)
  * [HELP:SPONSOR:ADDONS:DATA] END */
 const ADDONS: AddOn[] = [
-  /* [HELP:SPONSOR:ADDONS:YOUTH] START — Youth sponsor */
   {
     key: "youth",
     name: "Youth sponsor",
@@ -104,9 +123,6 @@ const ADDONS: AddOn[] = [
     monthly: 50,
     hint: "Hjælp unge spillere med træning & udstyr",
   },
-  /* [HELP:SPONSOR:ADDONS:YOUTH] END */
-
-  /* [HELP:SPONSOR:ADDONS:EVENTS] START — Event sponsor */
   {
     key: "events",
     name: "Event sponsor",
@@ -114,9 +130,6 @@ const ADDONS: AddOn[] = [
     yearly: 1000,
     hint: "Synlighed ved klubarrangementer",
   },
-  /* [HELP:SPONSOR:ADDONS:EVENTS] END */
-
-  /* [HELP:SPONSOR:ADDONS:GEAR] START — Udstyr sponsor */
   {
     key: "gear",
     name: "Udstyr sponsor",
@@ -124,7 +137,6 @@ const ADDONS: AddOn[] = [
     yearly: 1500,
     hint: "Bidrag til tavler, stativer og materialer",
   },
-  /* [HELP:SPONSOR:ADDONS:GEAR] END */
 ];
 
 /* [HELP:SPONSOR:UTILS] START
@@ -150,6 +162,65 @@ function addonPriceLabel(a: AddOn) {
 }
 /* [HELP:SPONSOR:UTILS:ADDON-LABEL] END */
 
+/* [HELP:SPONSOR:SHEET:MAP] START — map SPONSORPAKKER-rækker til Package */
+function mapSheetRowToPackage(row: SheetRow): Package | null {
+  const visible = isTruthyYes(row["visible"]);
+  if (!visible) return null;
+
+  const key =
+    normalizeString(row["package_key"]) ||
+    normalizeString(row["key"]) ||
+    normalizeString(row["id"]);
+
+  if (!key) return null;
+
+  const name =
+    row["package_title"] ||
+    row["title"] ||
+    row["badge_label"] ||
+    key;
+
+  const subtitle = row["subtitle"] || row["description"] || "";
+
+  const badge = row["badge_label"] || row["ribbon_label"] || "";
+
+  const priceAmountRaw = row["price_amount"] || row["price"] || "";
+  const priceYear = Number(priceAmountRaw) || 0;
+
+  const priceUnit =
+    row["price_unit"] ||
+    row["price_label"] ||
+    "kr./år";
+
+  const featuresRaw =
+    row["features"] ||
+    row["feature_list"] ||
+    row["feature_text"] ||
+    row["benefits"] ||
+    "";
+
+  const features = String(featuresRaw)
+    .split(/[;,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const icon = row["icon"] || "🎯";
+  const featured = isTruthyYes(row["featured"] || row["highlight"]);
+
+  return {
+    key,
+    name,
+    icon,
+    priceYear,
+    badge,
+    features,
+    priceUnit,
+    subtitle,
+    featured,
+  };
+}
+/* [HELP:SPONSOR:SHEET:MAP] END */
+
 /* ======================================
    Komponent
    ====================================== */
@@ -157,6 +228,57 @@ function addonPriceLabel(a: AddOn) {
  * Pitch: Selve siden — state, beregninger og JSX-sektioner.
  * [HELP:SPONSOR:COMPONENT] END */
 export default function SponsorPage() {
+  /* [HELP:SPONSOR:STATE:PACKAGES] START — sponsorpakker fra Sheet */
+  const [packages, setPackages] = useState<Package[]>(FALLBACK_PACKAGES);
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
+  const [packagesError, setPackagesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/sheet?tab=${encodeURIComponent(
+            SHEET_TAB_SPONSOR,
+          )}&key=${encodeURIComponent(SHEET_KEY)}`,
+        );
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status} – ${text}`);
+        }
+        const data = (await res.json()) as ApiListResponse;
+        if (!data.ok || !data.items) {
+          throw new Error(
+            data.error || data.message || "Kunne ikke hente sponsorpakker.",
+          );
+        }
+
+        const mapped = data.items
+          .map(mapSheetRowToPackage)
+          .filter((p): p is Package => !!p);
+
+        // Sortér efter "order" hvis feltet findes, ellers behold rækkefølge
+        mapped.sort((a, b) => {
+          const ao = Number(a as any["order"] ?? (a.featured ? 0 : 999));
+          const bo = Number(b as any["order"] ?? (b.featured ? 0 : 999));
+          return ao - bo;
+        });
+
+        if (mapped.length) {
+          setPackages(mapped);
+        }
+        setPackagesLoaded(true);
+      } catch (err: any) {
+        console.error("Fejl ved hentning af SPONSORPAKKER", err);
+        setPackagesError(
+          err?.message ||
+            "Kunne ikke hente sponsorpakker. Viser fallback i stedet.",
+        );
+        setPackagesLoaded(true);
+      }
+    })();
+  }, []);
+  /* [HELP:SPONSOR:STATE:PACKAGES] END */
+
   /* [HELP:SPONSOR:STATE:PACKAGE] START — valgt pakke (klik igen for at fjerne) */
   const [selected, setSelected] = useState<PackageKey | null>(null);
   /* [HELP:SPONSOR:STATE:PACKAGE] END */
@@ -181,7 +303,9 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:STATE:EARMARK] END */
 
   /* [HELP:SPONSOR:STATE:ADDONS] START — valgte tilkøb (toggle) */
-  const [selectedAddOns, setSelectedAddOns] = useState<Record<AddOnKey, boolean>>({
+  const [selectedAddOns, setSelectedAddOns] = useState<
+    Record<AddOnKey, boolean>
+  >({
     youth: false,
     events: false,
     gear: false,
@@ -192,9 +316,9 @@ export default function SponsorPage() {
 
   /* [HELP:SPONSOR:COMPUTE:BASE] START — pris for valgt pakke */
   const baseYear = useMemo(() => {
-    const p = PACKAGES.find((x) => x.key === selected);
+    const p = packages.find((x) => x.key === selected);
     return p ? p.priceYear : 0;
-  }, [selected]);
+  }, [selected, packages]);
   /* [HELP:SPONSOR:COMPUTE:BASE] END */
 
   /* [HELP:SPONSOR:COMPUTE:ADDONS] START — tilkøbspriser (pr. år & pr. måned) */
@@ -231,25 +355,33 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:COMPUTE:EARMARK] END */
 
   /* [HELP:SPONSOR:COMPUTE:READY] START — er noget valgt? (kan bruges til CTA) */
-  const anyAddon = useMemo(() => Object.values(selectedAddOns).some(Boolean), [selectedAddOns]);
+  const anyAddon = useMemo(
+    () => Object.values(selectedAddOns).some(Boolean),
+    [selectedAddOns],
+  );
   const readyForForm = Boolean(selected || clickActive || anyAddon);
   /* [HELP:SPONSOR:COMPUTE:READY] END */
 
   /* [HELP:SPONSOR:SUMMARY:BUILD] START — generér tekstopsummering til print/kopi/mail */
   const buildSummaryText = () => {
-    const p = PACKAGES.find((x) => x.key === selected);
+    const p = packages.find((x) => x.key === selected);
     const lines: string[] = [];
     lines.push("Humlum Dartklub — Sponsoropsummering");
     lines.push("==================================");
     if (p) {
-      lines.push(`Pakke: ${p.name} (${fmt.format(p.priceYear)}/år)`);
+      lines.push(
+        `Pakke: ${p.name} (${fmt.format(p.priceYear)}${
+          p.priceUnit ? " / " + p.priceUnit : "/år"
+        })`,
+      );
     } else {
       lines.push("Pakke: (ingen valgt)");
     }
     if (clickActive) {
       lines.push(`Ét-klik støtte: ${fmt.format(oneClick)} (engang)`);
       if (clickAnon) lines.push(`  • Anonym støtte: JA`);
-      if (earmarkList.length) lines.push(`  • Øremærkning: ${earmarkList.join(", ")}`);
+      if (earmarkList.length)
+        lines.push(`  • Øremærkning: ${earmarkList.join(", ")}`);
     }
     const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]);
     if (chosenAddons.length) {
@@ -267,9 +399,15 @@ export default function SponsorPage() {
 
   /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — print / kopiér / mail knappernes logik */
   const handlePrint = () => {
-    const w = window.open("", "_blank", "noopener,noreferrer,width=800,height=900");
+    const w = window.open(
+      "",
+      "_blank",
+      "noopener,noreferrer,width=800,height=900",
+    );
     if (!w) return;
-    w.document.write(`<pre style="font:14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:16px;">${buildSummaryText()}</pre>`);
+    w.document.write(
+      `<pre style="font:14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:16px;">${buildSummaryText()}</pre>`,
+    );
     w.document.close();
     w.focus();
     w.print();
@@ -304,8 +442,14 @@ export default function SponsorPage() {
         <h1 className="section-title">Støt Humlum Dartklub</h1>
         <div className="section-underline" />
         <p className="section-subtitle">
-          Vælg en pakke og/eller støt med et valgfrit beløb. Opsummeringen kan printes, kopieres eller sendes som e-mail.
+          Vælg en pakke og/eller støt med et valgfrit beløb. Opsummeringen kan
+          printes, kopieres eller sendes som e-mail.
         </p>
+        {packagesError && (
+          <p className="mt-2 text-xs text-red-600">
+            {packagesError}
+          </p>
+        )}
       </section>
       {/* [HELP:SPONSOR:SECTION:INTRO] END */}
 
@@ -313,11 +457,11 @@ export default function SponsorPage() {
       <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
-          PAKKER & ÉT-KLIK STØTTE
+          PAKKER &amp; ÉT-KLIK STØTTE
         </div>
 
         <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
-          {PACKAGES.map((p) => {
+          {packages.map((p) => {
             const isSel = selected === p.key;
             return (
               <div
@@ -331,7 +475,8 @@ export default function SponsorPage() {
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-semibold text-gray-900">
-                    <span className="mr-2">{p.icon}</span>{p.name}
+                    <span className="mr-2">{p.icon}</span>
+                    {p.name}
                   </h3>
                   {p.badge && (
                     <span className="rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-xs text-gray-700">
@@ -341,11 +486,20 @@ export default function SponsorPage() {
                 </div>
 
                 <p className="mt-2 text-2xl font-extrabold text-gray-900">
-                  {fmt.format(p.priceYear)} <span className="text-sm font-normal opacity-70">/år</span>
+                  {fmt.format(p.priceYear)}{" "}
+                  <span className="text-sm font-normal opacity-70">
+                    /år
+                  </span>
                 </p>
 
+                {p.subtitle && (
+                  <p className="mt-1 text-xs text-gray-600">{p.subtitle}</p>
+                )}
+
                 <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 min-h-[96px]">
-                  {p.features.map((f, i) => <li key={i}>{f}</li>)}
+                  {p.features.map((f, i) => (
+                    <li key={i}>{f}</li>
+                  ))}
                 </ul>
 
                 <button
@@ -369,7 +523,9 @@ export default function SponsorPage() {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">💚 Støt med ét klik</h3>
-              <span className="text-xs opacity-70">{fmt0.format(clickActive ? clickAmount : 0)} kr. engang</span>
+              <span className="text-xs opacity-70">
+                {fmt0.format(clickActive ? clickAmount : 0)} kr. engang
+              </span>
             </div>
 
             {/* Quick beløb */}
@@ -379,9 +535,14 @@ export default function SponsorPage() {
                   key={q}
                   className={[
                     "rounded-full border px-3 py-1 text-sm",
-                    q === clickAmount ? "border-lime-400 bg-lime-50" : "border-lime-200 bg-white hover:bg-lime-50",
+                    q === clickAmount
+                      ? "border-lime-400 bg-lime-50"
+                      : "border-lime-200 bg-white hover:bg-lime-50",
                   ].join(" ")}
-                  onClick={() => { setClickAmount(q); setClickActive(true); }}
+                  onClick={() => {
+                    setClickAmount(q);
+                    setClickActive(true);
+                  }}
                 >
                   {fmt0.format(q)} kr
                 </button>
@@ -397,42 +558,77 @@ export default function SponsorPage() {
                 min={CLICK_MIN}
                 max={CLICK_MAX}
                 value={clickAmount}
-                onChange={(e) => setClickAmount(clamp(Number(e.target.value || 0), CLICK_MIN, CLICK_MAX))}
+                onChange={(e) =>
+                  setClickAmount(
+                    clamp(
+                      Number(e.target.value || 0),
+                      CLICK_MIN,
+                      CLICK_MAX,
+                    ),
+                  )
+                }
                 onFocus={() => setClickActive(true)}
               />
               <p className="mt-1 text-xs text-gray-500">
-                Min {CLICK_MIN} kr · Max {fmt0.format(CLICK_MAX)} kr. Større beløb? Skriv – vi kontakter dig diskret.
+                Min {CLICK_MIN} kr · Max {fmt0.format(CLICK_MAX)} kr. Større
+                beløb? Skriv – vi kontakter dig diskret.
               </p>
             </div>
 
             {/* Øremærkning – fold-out */}
             <details className="mt-3 rounded-xl border border-lime-300/60 bg-gray-50 p-3">
-              <summary className="cursor-pointer text-sm">Øremærkning (valgfrit)</summary>
+              <summary className="cursor-pointer text-sm">
+                Øremærkning (valgfrit)
+              </summary>
               <div className="mt-3 space-y-2 text-sm text-gray-800">
                 <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={clickAnon} onChange={() => setClickAnon(!clickAnon)} />
+                  <input
+                    type="checkbox"
+                    checked={clickAnon}
+                    onChange={() => setClickAnon(!clickAnon)}
+                  />
                   Anonym støtte
                 </label>
 
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                   <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={tags.dartskive} onChange={() => toggleTag("dartskive")} />
+                    <input
+                      type="checkbox"
+                      checked={tags.dartskive}
+                      onChange={() => toggleTag("dartskive")}
+                    />
                     Dartskive
                   </label>
                   <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={tags.udstyr} onChange={() => toggleTag("udstyr")} />
+                    <input
+                      type="checkbox"
+                      checked={tags.udstyr}
+                      onChange={() => toggleTag("udstyr")}
+                    />
                     Udstyr
                   </label>
                   <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={tags.ungdom} onChange={() => toggleTag("ungdom")} />
+                    <input
+                      type="checkbox"
+                      checked={tags.ungdom}
+                      onChange={() => toggleTag("ungdom")}
+                    />
                     Ungdom
                   </label>
                   <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={tags.arrangementer} onChange={() => toggleTag("arrangementer")} />
+                    <input
+                      type="checkbox"
+                      checked={tags.arrangementer}
+                      onChange={() => toggleTag("arrangementer")}
+                    />
                     Arrangementer
                   </label>
                   <label className="inline-flex items-center gap-2 col-span-2">
-                    <input type="checkbox" checked={tags.drift} onChange={() => toggleTag("drift")} />
+                    <input
+                      type="checkbox"
+                      checked={tags.drift}
+                      onChange={() => toggleTag("drift")}
+                    />
                     Generel drift
                   </label>
                 </div>
@@ -476,10 +672,19 @@ export default function SponsorPage() {
                     <span className="mr-2">{a.icon}</span>
                     {a.name}
                   </h4>
-                  <span className="text-sm text-gray-700">{addonPriceLabel(a)}</span>
+                  <span className="text-sm text-gray-700">
+                    {addonPriceLabel(a)}
+                  </span>
                 </div>
-                {a.hint && <p className="mt-1 text-xs text-gray-600 min-h-[36px]">{a.hint}</p>}
-                <button onClick={() => toggleAddon(a.key)} className="mt-auto w-full btn btn-primary">
+                {a.hint && (
+                  <p className="mt-1 text-xs text-gray-600 min-h-[36px]">
+                    {a.hint}
+                  </p>
+                )}
+                <button
+                  onClick={() => toggleAddon(a.key)}
+                  className="mt-auto w-full btn btn-primary"
+                >
                   {active ? "Tilvalgt" : "Vælg"}
                 </button>
               </div>
@@ -503,7 +708,9 @@ export default function SponsorPage() {
               <div className="flex justify-between">
                 <dt>Pakke</dt>
                 <dd className="font-semibold">
-                  {selected ? PACKAGES.find((x) => x.key === selected)?.name : "(ingen)"}
+                  {selected
+                    ? packages.find((x) => x.key === selected)?.name
+                    : "(ingen)"}
                 </dd>
               </div>
               <div className="flex justify-between">
@@ -529,15 +736,26 @@ export default function SponsorPage() {
           {/* [HELP:SPONSOR:SUMMARY:RIGHT] START — total + knapper */}
           <div className="rounded-xl border border-lime-300/60 bg-white p-4">
             <p className="text-lg">I alt pr. år</p>
-            <p className="text-3xl font-extrabold text-gray-900">{fmt.format(totalYear)}</p>
-            <p className="mt-1 text-sm opacity-70">ca. {fmt.format(totalMonth)} pr. måned</p>
+            <p className="text-3xl font-extrabold text-gray-900">
+              {fmt.format(totalYear)}
+            </p>
+            <p className="mt-1 text-sm opacity-70">
+              ca. {fmt.format(totalMonth)} pr. måned
+            </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={handlePrint} className="btn btn-primary">Print</button>
-              <button onClick={handleCopy} className="btn btn-primary">Kopiér tekst</button>
-              <button onClick={handleMail} className="btn btn-primary">Send mail</button>
-              {/* Skema-link tilbage igen */}
-              <a href={SPONSOR_FORM_HREF} className="btn btn-primary">Udfyld sponsor-skema</a>
+              <button onClick={handlePrint} className="btn btn-primary">
+                Print
+              </button>
+              <button onClick={handleCopy} className="btn btn-primary">
+                Kopiér tekst
+              </button>
+              <button onClick={handleMail} className="btn btn-primary">
+                Send mail
+              </button>
+              <a href={SPONSOR_FORM_HREF} className="btn btn-primary">
+                Udfyld sponsor-skema
+              </a>
             </div>
           </div>
           {/* [HELP:SPONSOR:SUMMARY:RIGHT] END */}

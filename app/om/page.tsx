@@ -11,38 +11,40 @@ type Member = { role: string; name: string; email?: string; phone?: string };
 
 /* [HELP:ABOUT:VALUES] START — klubværdier (liste) */
 const VALUES = [
-  { title: "Fællesskab", text: "alle skal kunne være med og føle sig velkomne." },
-  { title: "Præcision",  text: "vi træner klogt, måler fremskridt og deler læring." },
-  { title: "Respekt",    text: "fairplay, ordentlig tone og plads til forskellighed." },
-  { title: "Frivillighed", text: "vi bygger klubben sammen – med tid, idéer og energi." },
+  { title: "Fællesskab", text: "Alle skal kunne være med og føle sig velkomne." },
+  { title: "Præcision",  text: "Vi træner klogt, måler fremskridt og deler læring." },
+  { title: "Respekt",    text: "Fairplay, ordentlig tone og plads til forskellighed." },
+  { title: "Frivillighed", text: "Vi bygger klubben sammen – med tid, idéer og energi." },
 ];
 /* [HELP:ABOUT:VALUES] END */
 
+/* [HELP:ABOUT:TRAIN:CONFIG] START */
+const TRAIN_RULES = [
+  { weekday: 2, timeHHMM: "19:00", label: "Tirsdag 19:00" },
+  { weekday: 4, timeHHMM: "19:00", label: "Torsdag 19:00" },
+];
+const INTERVAL_WEEKS = 1;
+/* [HELP:ABOUT:TRAIN:CONFIG] END */
+
 /* [HELP:ABOUT:BOARD] START — bestyrelse (kan senere flyttes til Sheet) */
 const BOARD: Member[] = [
-  { role: "Formand",      name: "Navn 1", email: "formand@example.dk",      phone: "+45 12 34 56 78" },
-  { role: "Næstformand",  name: "Navn 2", email: "naestformand@example.dk", phone: "+45 11 22 33 44" },
-  { role: "Kasserer",     name: "Navn 3", email: "kasserer@example.dk",     phone: "+45 22 33 44 55" },
-  { role: "Bestyrelsesmedlem", name: "Navn 4", email: "bestyrelse@example.dk", phone: "+45 33 44 55 66" },
-  { role: "Suppleant",   name: "Navn 5", email: "suppleant@example.dk",    phone: "+45 44 55 66 77" },
+  { role: "Formand", name: "Ernst" },
+  { role: "Kasserer", name: "Søren" },
+  { role: "Bestyrelsesmedlem", name: "Jeppe" },
+  { role: "Suppleant", name: "Martin" },
+  { role: "Suppleant", name: "Villy" },
+  { role: "Revisor", name: "Kasper" },
 ];
 /* [HELP:ABOUT:BOARD] END */
 
-/* [HELP:ABOUT:TRAIN:CONFIG] START — træningsregler (prøvetræning slots) */
-type Rule = { weekday: number; timeHHMM: string }; // 0=søn … 6=lør
-
-const TRAIN_RULES: Rule[] = [
-  { weekday: 2, timeHHMM: "18:30" }, // tirs
-  { weekday: 4, timeHHMM: "19:00" }, // tors
-  // { weekday: 3, timeHHMM: "17:00" }, // åbnes når juniorhold er klar
-];
-
-const INTERVAL_WEEKS = 1; // sæt til 2 for hver 14. dag
-/* [HELP:ABOUT:TRAIN:CONFIG] END */
-
-/* [HELP:ABOUT:UTIL:nextSlots] START — beregn næste slots */
-function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
+/* [HELP:ABOUT:UTIL:nextSlots] START */
+function nextSlots(
+  rules: { weekday: number; timeHHMM: string; label: string }[],
+  count = 12,
+  intervalWeeks = 1
+) {
   const out: { date: Date; isoDate: string; time: string; label: string }[] = [];
+
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let weeksChecked = 0;
@@ -52,14 +54,28 @@ function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
       const d = new Date(start);
       const dayDiff = (r.weekday - d.getDay() + 7) % 7;
       d.setDate(d.getDate() + dayDiff + weeksChecked * 7 * intervalWeeks);
-      const [hh, mm] = r.timeHHMM.split(":").map(n => parseInt(n, 10));
+
+      const [hh, mm] = r.timeHHMM.split(":").map((n) => parseInt(n, 10));
       d.setHours(hh, mm, 0, 0);
+
       if (d.getTime() <= now.getTime()) continue;
 
       const isoDate = d.toISOString().slice(0, 10);
       const time = r.timeHHMM;
-      const weekdayNames = ["Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag"];
-      const label = `${weekdayNames[d.getDay()]} d. ${d.getDate().toString().padStart(2, "0")}-${(d.getMonth() + 1)
+
+      const weekdayNames = [
+        "Søndag",
+        "Mandag",
+        "Tirsdag",
+        "Onsdag",
+        "Torsdag",
+        "Fredag",
+        "Lørdag",
+      ];
+      const label = `${weekdayNames[d.getDay()]} d. ${d
+        .getDate()
+        .toString()
+        .padStart(2, "0")}-${(d.getMonth() + 1)
         .toString()
         .padStart(2, "0")} kl. ${time}`;
 
@@ -74,7 +90,7 @@ function nextSlots(rules: Rule[], count = 24, intervalWeeks = 1) {
 }
 /* [HELP:ABOUT:UTIL:nextSlots] END */
 
-/* [HELP:ABOUT:API] START — API endpoint til prøvetræning */
+/* [HELP:ABOUT:API] START */
 async function createTryoutBooking(payload: {
   date: string;
   time: string;
@@ -102,77 +118,85 @@ async function createTryoutBooking(payload: {
 }
 /* [HELP:ABOUT:API] END */
 
-/* [HELP:ABOUT:COMP] START — hovedkomponent */
-export default function AboutPage() {
-  /* [HELP:ABOUT:STATE:SLOTS] START — beregn & hold slots */
+/* [HELP:ABOUT:COMP] START */
+export default function OmPage() {
+  /* [HELP:ABOUT:STATE] START */
   const [slots] = useState(() => nextSlots(TRAIN_RULES, 24, INTERVAL_WEEKS));
   const [selectedSlot, setSelectedSlot] = useState<string>("");
-  /* [HELP:ABOUT:STATE:SLOTS] END */
-
-  /* [HELP:ABOUT:HANDLERS:NAV] START — scroll til sektion */
-  const go = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-  /* [HELP:ABOUT:HANDLERS:NAV] END */
-
-  /* [HELP:ABOUT:STATE] START — modal/valg/form state */
   const [showBooking, setShowBooking] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
   /* [HELP:ABOUT:STATE] END */
 
-  /* [HELP:ABOUT:EFFECT:PRESELECT] START — auto-vælg første slot */
-  useEffect(() => {
-    if (!selectedSlot && slots.length > 0) {
-      setSelectedSlot(slots[0].isoDate + "T" + slots[0].time);
-      setSelectedDate(slots[0].isoDate);
-      setSelectedTime(slots[0].time);
-    }
-  }, [selectedSlot, slots]);
-  /* [HELP:ABOUT:EFFECT:PRESELECT] END */
-
-  /* [HELP:ABOUT:HANDLERS:OPEN] START — åbn/luk modal */
-  const openBooking = useCallback(
-    (slotId?: string) => {
-      if (slotId) {
-        setSelectedSlot(slotId);
-        const [date, time] = slotId.split("T");
-        setSelectedDate(date);
-        setSelectedTime(time);
-      }
-      setShowBooking(true);
-      setMsg(null);
-      setSuccess(false);
-    },
+  const showBoardContacts = useMemo(
+    () => BOARD.some((m) => m.email || m.phone),
     []
   );
+
+  /* [HELP:ABOUT:HANDLERS:NAV] START */
+  const go = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - 96;
+    window.scrollTo({ top: y, behavior: "smooth" });
+  }, []);
+  /* [HELP:ABOUT:HANDLERS:NAV] END */
+
+  /* [HELP:ABOUT:EFFECT:PRESELECT] START */
+  useEffect(() => {
+    if (!selectedSlot) return;
+    const [date, time] = selectedSlot.split("T");
+    if (date && time) {
+      setSelectedDate(date);
+      setSelectedTime(time);
+    }
+  }, [selectedSlot]);
+  /* [HELP:ABOUT:EFFECT:PRESELECT] END */
+
+  /* [HELP:ABOUT:HANDLERS:OPEN] START */
+  const openBooking = useCallback((slotId?: string) => {
+    if (slotId) {
+      setSelectedSlot(slotId);
+      const [date, time] = slotId.split("T");
+      setSelectedDate(date);
+      setSelectedTime(time);
+    }
+    setShowBooking(true);
+    setMsg(null);
+    setSuccess(false);
+  }, []);
 
   const closeBooking = useCallback(() => {
     setShowBooking(false);
   }, []);
   /* [HELP:ABOUT:HANDLERS:OPEN] END */
 
-  /* [HELP:ABOUT:HANDLERS:SUBMIT] START — send “Book prøvetræning” */
+  /* [HELP:ABOUT:HANDLERS:SUBMIT] START */
   async function submitBooking() {
     setMsg(null);
+
     if (!name || !email || !selectedDate || !selectedTime) {
       const missing = [
         !name ? "navn" : null,
         !email ? "e-mail" : null,
         !selectedDate ? "dato" : null,
         !selectedTime ? "tidspunkt" : null,
-      ].filter(Boolean).join(", ");
+      ]
+        .filter(Boolean)
+        .join(", ");
       setMsg(`Udfyld venligst: ${missing}.`);
       return;
     }
+
     setBusy(true);
     try {
       await createTryoutBooking({
@@ -197,160 +221,169 @@ export default function AboutPage() {
   }
   /* [HELP:ABOUT:HANDLERS:SUBMIT] END */
 
-  /* [HELP:ABOUT:LAYOUT] START — render */
+  /* [HELP:ABOUT:LAYOUT] START */
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      {/* HERO / INTRO */}
-      <section className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+      {/* HERO */}
+      <section className="mb-8 rounded-2xl border border-lime-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 text-sm">
+            <div className="kicker mb-2 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-lime-500" />
               <span>Om klubben</span>
             </div>
-            <h1 className="mt-1 text-2xl font-extrabold">
-              Humlum Dartklub – fællesskab &amp; præcision ved Limfjorden
+            <h1 className="text-2xl font-extrabold tracking-tight">
+              Humlum Dartklub
             </h1>
-            <p className="mt-1 text-sm text-gray-700 max-w-2xl">
-              Vi er en lokal dartklub med fokus på fællesskab, udvikling og
-              gode oplevelser – for både nye spillere, hyggeniveau og dem, der
-              jagter turneringsscenen.
+            <p className="mt-2 text-sm text-gray-700 max-w-2xl">
+              Vi er en ny lokal forening med fokus på fællesskab, udvikling og
+              god dartkultur. Her er plads til både nybegyndere, familier og
+              dig, der drømmer om turneringsniveau.
             </p>
           </div>
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => go("traening")}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              onClick={() => go("klubinfo")}
+              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
             >
-              Se træning &amp; prøvetræning
+              Klubinfo
+            </button>
+            <button
+              type="button"
+              onClick={() => go("traening")}
+              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+            >
+              Træning
+            </button>
+            <button
+              type="button"
+              onClick={() => go("medlemskab")}
+              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+            >
+              Medlemskab
             </button>
             <Link
+              href="/sponsor"
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+            >
+              Bliv sponsor
+            </Link>
+            <Link
               href="/bliv-medlem"
-              className="rounded-xl border border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
             >
               Bliv medlem
             </Link>
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-2 text-sm">
-          {VALUES.map((v) => (
-            <div key={v.title} className="rounded-xl bg-lime-50 border border-lime-200 p-3">
-              <div className="font-semibold">{v.title}</div>
-              <div className="text-gray-700 text-xs mt-1">{v.text}</div>
-            </div>
-          ))}
-        </div>
       </section>
 
-      {/* NAV-CHIPS */}
-      <nav className="mb-6 flex flex-wrap gap-2 text-xs">
-        <button
-          type="button"
-          onClick={() => go("klubinfo")}
-          className="rounded-full border border-lime-300 bg-white px-3 py-1 hover:bg-lime-50"
-        >
-          Klubinfo
-        </button>
-        <button
-          type="button"
-          onClick={() => go("bestyrelse")}
-          className="rounded-full border border-lime-300 bg-white px-3 py-1 hover:bg-lime-50"
-        >
-          Bestyrelse
-        </button>
-        <button
-          type="button"
-          onClick={() => go("traening")}
-          className="rounded-full border border-lime-300 bg-white px-3 py-1 hover:bg-lime-50"
-        >
-          Træning &amp; prøvetræning
-        </button>
-        <button
-          type="button"
-          onClick={() => go("kontakt")}
-          className="rounded-full border border-lime-300 bg-white px-3 py-1 hover:bg-lime-50"
-        >
-          Kontakt &amp; praktisk info
-        </button>
-        <button
-          type="button"
-          onClick={() => go("dokumenter")}
-          className="rounded-full border border-lime-300 bg-white px-3 py-1 hover:bg-lime-50"
-        >
-          Dokumenter
-        </button>
-      </nav>
+      {/* GRID KORT */}
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+        {/* VÆRDIER */}
+        <section id="vaerdier" className="card h-full min-h-[84px]">
+          <details className="group">
+            <summary className="cursor-pointer list-none">
+              <div className="kicker mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-lime-500" />
+                  <span>VÆRDIER</span>
+                </div>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
+              </div>
+            </summary>
+            <div className="space-y-3 text-sm text-gray-800">
+              {VALUES.map((v) => (
+                <div key={v.title}>
+                  <div className="font-semibold">{v.title}</div>
+                  <div className="text-gray-700">{v.text}</div>
+                </div>
+              ))}
+            </div>
+          </details>
+        </section>
 
-      {/* GRID: INFO / BESTYRELSE / DOKS / MAP */}
-      <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4 mb-6">
         {/* KLUBINFO */}
         <section id="klubinfo" className="card h-full min-h-[84px]">
-          <details className="group" open>
+          <details className="group">
             <summary className="cursor-pointer list-none">
               <div className="kicker mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>KLUBINFO</span>
                 </div>
-                <span className="inline-block text-xs uppercase tracking-wide text-gray-500">
-                  Humlum Dartklub
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
                 </span>
               </div>
             </summary>
-            <div className="space-y-1 text-sm text-gray-800">
-              <p>Navn: Humlum Dartklub</p>
-              <p>Sted: Humlum-området ved Limfjorden, Struer Kommune</p>
-              <p>Foreningstype: Idrætsforening / dartklub</p>
-              <p>Opstart: [indsæt årstal for opstart/stiftelse]</p>
-              <p>Medlemsgrundlag: Børn, unge og voksne – både hygge og turnering.</p>
-            </div>
-          </details>
-        </section>
 
-        {/* BESTYRELSE */}
-        <section id="bestyrelse" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>BESTYRELSE</span>
+            <div className="space-y-3 text-sm text-gray-800">
+              <p>
+                Humlum Dartklub arbejder for at skabe et stærkt lokalt
+                foreningsmiljø med plads til både hygge og ambition.
+              </p>
+              <p>
+                Vi bygger klubben trin for trin, så rammer, træning og events
+                kan skaleres i takt med at vi bliver flere.
+              </p>
+
+              <div className="mt-3 rounded-xl border bg-gray-50 p-3">
+                <div className="font-semibold mb-2">Bestyrelse</div>
+                <div className="overflow-x-auto text-sm text-gray-800">
+                  <table className="min-w-full border-separate border-spacing-y-1">
+                    <tbody>
+                      {BOARD.map((m) => (
+                        <tr key={m.role} className="align-top">
+                          <td className="pr-2 font-semibold whitespace-nowrap">
+                            {m.role}
+                          </td>
+                          <td className="pr-2 whitespace-nowrap">{m.name}</td>
+                          {showBoardContacts && (
+                            <td className="pr-2 whitespace-nowrap">
+                              {m.email && (
+                                <a
+                                  href={`mailto:${m.email}`}
+                                  className="text-emerald-700 hover:text-emerald-800 underline"
+                                >
+                                  {m.email}
+                                </a>
+                              )}
+                            </td>
+                          )}
+                          {showBoardContacts && (
+                            <td className="whitespace-nowrap">
+                              {m.phone && (
+                                <a
+                                  href={`tel:${m.phone}`}
+                                  className="text-emerald-700 hover:text-emerald-800 underline"
+                                >
+                                  {m.phone}
+                                </a>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                {!showBoardContacts && (
+                  <p className="mt-2 text-xs text-gray-600">
+                    Kontaktoplysninger offentliggøres, når klubben er helt klar
+                    med de endelige spor.
+                  </p>
+                )}
               </div>
-            </summary>
-            <div className="overflow-x-auto text-sm text-gray-800">
-              <table className="min-w-full border-separate border-spacing-y-1">
-                <tbody>
-                  {BOARD.map((m) => (
-                    <tr key={m.role} className="align-top">
-                      <td className="pr-2 font-semibold whitespace-nowrap">{m.role}</td>
-                      <td className="pr-2 whitespace-nowrap">{m.name}</td>
-                      <td className="pr-2 whitespace-nowrap">
-                        {m.email && (
-                          <a href={`mailto:${m.email}`} className="text-emerald-700 hover:text-emerald-800 underline">
-                            {m.email}
-                          </a>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        {m.phone && (
-                          <a href={`tel:${m.phone}`} className="text-emerald-700 hover:text-emerald-800 underline">
-                            {m.phone}
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </details>
         </section>
 
         {/* DOKUMENTER (OFFENTLIGE) */}
-        {/* [HELP:ABOUT:SEC:DOCS] START */}
         <section id="dokumenter" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -359,7 +392,9 @@ export default function AboutPage() {
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>DOKUMENTER (OFFENTLIGE)</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
             <ul className="text-sm text-gray-800 space-y-2">
@@ -381,14 +416,11 @@ export default function AboutPage() {
                   Privatlivspolitik
                 </Link>
               </li>
-              {/* Ordensregler (PDF) tilføjes senere, når dokumentet er klar */}
             </ul>
           </details>
         </section>
-        {/* [HELP:ABOUT:SEC:DOCS] END */}
 
-        {/* KORT / FIND OS */}
-        {/* [HELP:ABOUT:SEC:MAP] START */}
+        {/* FIND OS */}
         <section id="find-os" className="card h-full min-h-[84px]">
           <details className="group">
             <summary className="cursor-pointer list-none">
@@ -397,59 +429,68 @@ export default function AboutPage() {
                   <span className="h-2 w-2 rounded-full bg-lime-500" />
                   <span>FIND OS</span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                  ▾
+                </span>
               </div>
             </summary>
             <div className="space-y-2 text-sm text-gray-800">
-              <p>Spillested: [indsæt adresse på spillested]</p>
-              <p>Område: Humlum / Struer / Limfjorden</p>
+              <p>Spillested: Offentliggøres snarest, når lokaler er på plads.</p>
+              <p>Område: Humlum / Struer og omegn.</p>
+              <p>Parkering: Information følger, når spillested er fastlagt.</p>
               <p>
-                Parkering: [kort info om parkering – f.eks. gratis parkering ved hallen/klublokalet].
-              </p>
-              <p>
-                Vi opdaterer løbende praktisk info, når klubben er helt på plads med lokaler og faciliteter.
+                Vi opdaterer løbende praktisk info, når klubben er helt på
+                plads med lokaler og faciliteter.
               </p>
             </div>
           </details>
         </section>
-        {/* [HELP:ABOUT:SEC:MAP] END */}
       </section>
 
       {/* TRÆNING & PRØVETRÆNING */}
-      <section id="traening" className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+      <section
+        id="traening"
+        className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm"
+      >
         <div className="kicker mb-2 flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
           <span>Træning &amp; prøvetræning</span>
         </div>
-        <h2 className="text-xl font-extrabold mb-1">Træning i Humlum Dartklub</h2>
-        <p className="text-sm text-gray-700 mb-3">
-          Vi starter stille og roligt op med faste træningsaftener og mulighed for at booke prøvetræning. Fokus er på
-          at alle føler sig velkomne – uanset niveau.
-        </p>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-xl bg-lime-50 border border-lime-200 p-3 text-sm text-gray-800">
-            <h3 className="font-semibold mb-1">Træningstider (forventet)</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Tirsdag aften – fokus på hygge, teknik og fællesskab.</li>
-              <li>Torsdag aften – mere målrettet træning for øvede/turnering.</li>
-              <li>Junior-/ungdomshold oprettes, når der er nok interesserede.</li>
-            </ul>
-          </div>
-          <div className="rounded-xl bg-lime-50 border border-lime-200 p-3 text-sm text-gray-800">
-            <h3 className="font-semibold mb-1">Niveauer</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li><strong>Hygge:</strong> Fokus på at have det sjovt og lære spillet at kende.</li>
-              <li><strong>Øvet:</strong> Spillere der vil udvikle sig, træne mere struktureret og måske spille lokale turneringer.</li>
-              <li><strong>Turnering:</strong> Spillere der vil på DDU-niveau og repræsentere klubben i turneringer.</li>
-            </ul>
-          </div>
-          <div className="rounded-xl bg-white border border-lime-200 p-3 text-sm text-gray-800">
-            <h3 className="font-semibold mb-1">Prøvetræning</h3>
-            <p className="mb-2">
-              Du er velkommen til at prøve at være med, inden du beslutter dig for medlemskab. Udfyld en kort
-              interesseformular, så vender vi tilbage med en konkret dag.
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-lime-200 bg-lime-50 p-4">
+            <h2 className="text-xl font-extrabold mb-1">
+              Træning i Humlum Dartklub
+            </h2>
+            <p className="text-sm text-gray-700 mb-3">
+              Vi starter med et solidt begynder- og fællesskabsfokus – og
+              udvider gradvist, når medlemmer, lokaler og faciliteter er helt på
+              plads.
             </p>
+
+            <h3 className="font-semibold mb-1">Træningstider (forventet)</h3>
+            <ul className="list-disc ml-5 text-sm text-gray-800 mb-3">
+              <li>1-2 faste ugentlige træningsaftener</li>
+              <li>Familie- og begynderfokus i opstartsfasen</li>
+              <li>Turneringstræning når vi er flere aktive</li>
+            </ul>
+
+            <h3 className="font-semibold mb-1">Niveauer</h3>
+            <ul className="list-disc ml-5 text-sm text-gray-800">
+              <li>Nybegyndere: intro, grundteknik og hyggefokus</li>
+              <li>Øvede: struktur, rutiner og stabilitet</li>
+              <li>Turnering: målrettet træning og match-play</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-lime-200 bg-white p-4">
+            <h3 className="font-semibold mb-1">Prøvetræning</h3>
+            <p className="mb-2 text-sm text-gray-700">
+              Du er velkommen til at prøve at være med, inden du beslutter dig
+              for medlemskab. Udfyld en kort interesseformular, så vender vi
+              tilbage med en konkret dag.
+            </p>
+
             <button
               type="button"
               onClick={() => openBooking()}
@@ -465,7 +506,7 @@ export default function AboutPage() {
           <div className="mt-4 rounded-xl border border-lime-200 bg-white p-3 text-sm text-gray-800">
             <h3 className="font-semibold mb-2">Mulige tidspunkter (oversigt)</h3>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {slots.slice(0, 9).map((s) => {
+              {slots.map((s) => {
                 const slotId = `${s.isoDate}T${s.time}`;
                 const isSelected = selectedSlot === slotId;
                 return (
@@ -491,105 +532,83 @@ export default function AboutPage() {
         )}
       </section>
 
-      {/* KONTAKT & PRAKTISK INFO */}
-      <section
-        id="kontakt"
-        className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm"
-      >
-        <div className="kicker mb-2 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
-          <span>Kontakt &amp; praktisk info</span>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3 text-sm text-gray-800">
-          <div>
-            <h3 className="font-semibold mb-1">Kontakt til klubben</h3>
-            <p>
-              E-mail:{" "}
-              <a
-                href="mailto:humlumdartklub@gmail.com"
-                className="text-emerald-700 hover:text-emerald-800 underline"
-              >
-                humlumdartklub@gmail.com
-              </a>
-            </p>
-            <p>Facebook: 
-              <a
-                href="https://www.facebook.com/humlumdartklub"
-                target="_blank"
-                className="ml-1 text-emerald-700 hover:text-emerald-800 underline"
-              >
-                facebook.com/humlumdartklub
-              </a>
-            </p>
+      {/* KONTAKT & MEDLEMSKAB */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="rounded-2xl border border-lime-200 bg-white p-4 shadow-sm">
+          <div className="kicker mb-2 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-lime-500" />
+            <span>Kontakt</span>
           </div>
-          <div>
-            <h3 className="font-semibold mb-1">Medlemskab</h3>
-            <p className="mb-1">
-              Du kan læse mere om medlemskab og pakker på siden{" "}
-              <Link href="/bliv-medlem" className="text-emerald-700 hover:text-emerald-800 underline">
-                Bliv medlem
-              </Link>
-              .
-            </p>
-            <p>
-              Tilmeldinger håndteres digitalt via vores hjemmeside, og du får bekræftelse på mail.
-            </p>
+          <h3 className="font-semibold mb-1">Kontakt til klubben</h3>
+          <p className="text-sm text-gray-700">
+            Har du spørgsmål om klubben, prøvetræning eller sponsorater, så
+            skriv endelig til os. Vi svarer så hurtigt som muligt.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/om#find-os"
+              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+            >
+              Find os
+            </Link>
+            <Link
+              href="/sponsor"
+              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+            >
+              Sponsorpakker
+            </Link>
           </div>
-          <div>
-            <h3 className="font-semibold mb-1">Sociale medier &amp; info</h3>
-            <p>
-              Vi bruger primært Facebook og hjemmesiden til at dele nyheder, events og praktisk info.
-            </p>
-            <p className="mt-1">
-              Følg os for opdateringer om opstart, træningsaftener, turneringer og fællesevents.
-            </p>
+        </section>
+
+        <section
+          id="medlemskab"
+          className="rounded-2xl border border-lime-200 bg-white p-4 shadow-sm"
+        >
+          <div className="kicker mb-2 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-lime-500" />
+            <span>Medlemskab</span>
           </div>
-        </div>
+          <h3 className="font-semibold mb-1">Medlemskab</h3>
+          <p className="text-sm text-gray-700 mb-3">
+            Du kan læse mere om medlemskab og pakker på siden{" "}
+            <Link
+              href="/bliv-medlem"
+              className="text-emerald-700 hover:text-emerald-800 underline"
+            >
+              Bliv medlem
+            </Link>
+            .
+          </p>
+          <p>
+            Tilmeldinger håndteres digitalt via vores hjemmeside. Kontingent og
+            indbetaling håndteres i klubben, og du får bekræftelse på mail.
+          </p>
+        </section>
       </section>
 
-      {/* MODAL: BOOK PRØVETRÆNING */}
+      {/* BOOKING MODAL */}
+      {/* [HELP:ABOUT:MODAL] START */}
       {showBooking && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Book prøvetræning</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Book prøvetræning</h2>
+                <p className="text-xs text-gray-600">
+                  Vi bekræfter tidspunktet, når lokaler og træningshold er helt
+                  fastlagt.
+                </p>
+              </div>
               <button
                 type="button"
+                className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50"
                 onClick={closeBooking}
-                className="text-sm text-gray-500 hover:text-gray-800"
               >
                 Luk
               </button>
             </div>
-            <div className="space-y-2 text-sm text-gray-800">
-              <p className="text-xs text-gray-600">
-                Udfyld formularen, så vender vi tilbage med en bekræftelse eller forslag til en anden tid.
-              </p>
 
-              <div>
-                <label className="text-xs font-medium">Dato &amp; tidspunkt</label>
-                <select
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                  value={selectedSlot}
-                  onChange={(e) => {
-                    const slotId = e.target.value;
-                    setSelectedSlot(slotId);
-                    const [date, time] = slotId.split("T");
-                    setSelectedDate(date);
-                    setSelectedTime(time);
-                  }}
-                >
-                  {slots.map((s) => {
-                    const slotId = `${s.isoDate}T${s.time}`;
-                    return (
-                      <option key={slotId} value={slotId}>
-                        {s.label}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-medium">Navn</label>
                 <input
@@ -598,7 +617,6 @@ export default function AboutPage() {
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
-
               <div>
                 <label className="text-xs font-medium">E-mail</label>
                 <input
@@ -607,7 +625,6 @@ export default function AboutPage() {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-
               <div>
                 <label className="text-xs font-medium">Telefon (valgfri)</label>
                 <input
@@ -617,7 +634,27 @@ export default function AboutPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium">Bemærkning (valgfri)</label>
+                <label className="text-xs font-medium">Dato</label>
+                <input
+                  type="date"
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Tidspunkt</label>
+                <input
+                  type="time"
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium">
+                  Bemærkning (valgfri)
+                </label>
                 <textarea
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   rows={3}
@@ -625,23 +662,25 @@ export default function AboutPage() {
                   onChange={(e) => setNote(e.target.value)}
                 />
               </div>
-
-              {msg && (
-                <p
-                  className={`text-xs ${
-                    success ? "text-emerald-700" : "text-red-600"
-                  }`}
-                >
-                  {msg}
-                </p>
-              )}
             </div>
 
-            <div className="mt-3 flex justify-end gap-2">
+            {msg && (
+              <div
+                className={`mt-4 rounded-xl border px-3 py-2 text-sm ${
+                  success
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {msg}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={closeBooking}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-xs"
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
               >
                 Annuller
               </button>
@@ -649,9 +688,9 @@ export default function AboutPage() {
                 type="button"
                 onClick={submitBooking}
                 disabled={busy}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
               >
-                {busy ? "Sender…" : "Send forespørgsel"}
+                {busy ? "Sender..." : "Send booking"}
               </button>
             </div>
           </div>
@@ -660,5 +699,6 @@ export default function AboutPage() {
       {/* [HELP:ABOUT:MODAL] END */}
     </main>
   );
+  /* [HELP:ABOUT:LAYOUT] END */
 }
 /* [HELP:ABOUT:COMP] END */

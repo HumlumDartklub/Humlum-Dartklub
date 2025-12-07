@@ -1,273 +1,129 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-/** ─────────────────────────────────────────────────────────
- *  [HELP:CONFIG] START
- *  Pitch: Konfiguration og grunddata for siden (pakker, niveauer m.m.)
- *  [HELP:CONFIG] END
- *  ───────────────────────────────────────────────────────── */
+/** [HELP:CONFIG] START */
+const TAB = "MEDLEMSPAKKER";
+const LIMIT = 50;
 
-/** [HELP:TYPES:PLAN] START — datatyper for pakker */
-type PlanKey = "passiv" | "basis" | "aktiv" | "premium" | "ungdom" | "familie";
+const KOEN = ["Mand", "Kvinde", "Andet"] as const;
+const NIVEAUER = ["Hygge", "Turnering"] as const;
+
+const ZIP_CITY: Record<string, string> = {
+  "7600": "Struer",
+  "7400": "Herning",
+  "7500": "Holstebro",
+  "7700": "Thisted",
+  "7800": "Skive",
+  "7620": "Lemvig",
+};
+
+const ZIP_SUGGEST = Object.keys(ZIP_CITY);
+/** [HELP:CONFIG] END */
+
+/** [HELP:TYPES:PLAN] START */
 type Plan = {
-  key: PlanKey;
-  pakke: string;
-  audience: string;
-  pris_pr_mdr: number;
-  features: string[];
+  key: string;
+  title: string;
+  subtitle?: string;
+  price_amount: number;
+  price_unit?: string;
+  features?: string[];
   badge?: string;
+  order?: number;
+  visible?: boolean;
 };
 /** [HELP:TYPES:PLAN] END */
 
-/** [HELP:TYPES:SHEETROW] START — generisk række fra MEDLEMSPAKKER */
-type SheetRow = { [key: string]: any };
-const PLAN_KEYS: PlanKey[] = [
-  "passiv",
-  "basis",
-  "aktiv",
-  "premium",
-  "ungdom",
-  "familie",
-];
+/** [HELP:TYPES:SHEETROW] START */
+type SheetRow = Record<string, any>;
 /** [HELP:TYPES:SHEETROW] END */
 
-/** [HELP:PLANS:DATA] START — fallback-pakke-data (bruges hvis Sheet fejler eller mangler felter) */
-const PLANS: Plan[] = [
-  {
-    key: "passiv",
-    pakke: "Passiv",
-    audience: "Alle",
-    pris_pr_mdr: 39,
-    features: [
-      "Støt klubben …",
-      "Navn på støtteliste",
-      "Nyhedsbreve",
-      "Invitation til sociale events",
-    ],
-  },
-  {
-    key: "basis",
-    pakke: "Basis",
-    audience: "Voksen",
-    pris_pr_mdr: 99,
-    features: [
-      "Fri træning",
-      "Klub adgang",
-      "Social events",
-      "Facebook gruppe",
-    ],
-  },
-  {
-    key: "aktiv",
-    pakke: "Aktiv",
-    audience: "Voksen",
-    pris_pr_mdr: 149,
-    features: ["Fri træning", "Klubarrangementer", "Træningsaftener"],
-  },
-  {
-    key: "premium",
-    pakke: "Premium",
-    audience: "Voksen",
-    pris_pr_mdr: 199,
-    badge: "Mest valgt",
-    features: [
-      "110% klubmand",
-      "Fri træning",
-      "Klubtrøje",
-      "Turneringer & events",
-    ],
-  },
-  {
-    key: "ungdom",
-    pakke: "Ungdom",
-    audience: "U/18",
-    pris_pr_mdr: 59,
-    features: [
-      "Ungdomsmedlemskab",
-      "Træning",
-      "Turneringer",
-      "Mentorordning & arrangementer",
-    ],
-  },
-  {
-    key: "familie",
-    pakke: "Familie",
-    audience: "Hele familien",
-    pris_pr_mdr: 269,
-    features: [
-      "Hele husstanden kan spille og deltage",
-      "Fri træning for familien",
-      "Familieevents",
-      "Forældre-barn turneringer",
-    ],
-  },
-];
-/** [HELP:PLANS:DATA] END */
-
-const FALLBACK_BY_KEY: Record<PlanKey, Plan> = PLANS.reduce(
-  (acc, p) => ({ ...acc, [p.key]: p }),
-  {} as Record<PlanKey, Plan>
-);
-
-/** [HELP:FORM:LEVELS] START — niveau-labels (ændr teksterne frit) */
-const NIVEAUER = ["Hygge", "Øvet", "Turnering"] as const;
-/** [HELP:FORM:LEVELS] END */
-
-/** [HELP:FORM:GENDER] START — kønsvalg (ændr/tilføj labels efter behov) */
-const KOEN = ["Mand", "Kvinde", "Andet"] as const;
-/** [HELP:FORM:GENDER] END */
-
-/** [HELP:FORM:ZIPCITY:DATA] START — Postnr→By mapping + forslag */
-const ZIP_TO_CITY: Record<string, string> = {
-  "7400": "Herning",
-  "7500": "Holstebro",
-  "7600": "Struer",
-  "7620": "Lemvig",
-  "7700": "Thisted",
-  "7800": "Skive",
-};
-const ZIP_SUGGESTIONS = Object.keys(ZIP_TO_CITY);
-/** [HELP:FORM:ZIPCITY:DATA] END */
-
-/** [HELP:FORM:FAMILY:TYPE] START — type for ekstra familiemedlemmer */
+/** [HELP:FORM:FAMILY:TYPE] START */
 type FamMember = { first: string; last: string; year: string };
 /** [HELP:FORM:FAMILY:TYPE] END */
 
-export default function BlivMedlem() {
-  /** [HELP:STATE:PLAN] START — valgt pakke + afledt plan-objekt */
+export default function BlivMedlemPage() {
+  /** [HELP:STATE:PLAN] START */
   const [plans, setPlans] = useState<Plan[] | null>(null);
-  const [selectedKey, setSelectedKey] = useState<PlanKey>("basis");
-  const plan = useMemo(() => {
-    const src = plans && plans.length > 0 ? plans : PLANS;
-    const found = src.find((p) => p.key === selectedKey);
-    return found ?? src[0];
-  }, [plans, selectedKey]);
+  const [selectedKey, setSelectedKey] = useState<string>("");
+  const scrollToFormRef = useRef<HTMLDivElement | null>(null);
   /** [HELP:STATE:PLAN] END */
 
-  /** [HELP:STATE:SHEETSYNC] START — hent MEDLEMSPAKKER fra Sheet v3 */
+  /** [HELP:STATE:SHEETSYNC] START */
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
 
     async function load() {
       try {
-        const res = await fetch("/api/sheet?tab=MEDLEMSPAKKER", {
-          method: "GET",
+        const res = await fetch(`/api/sheet?tab=${TAB}&limit=${LIMIT}`, {
           cache: "no-store",
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json().catch(() => null);
 
-        const data: any = await res.json();
-        const rows: SheetRow[] = Array.isArray(data?.items) ? data.items : [];
+        const items: SheetRow[] = data?.items || [];
+        const mapped: Plan[] = items
+          .map((r) => ({
+            key: String(r.key ?? r.package_key ?? "").trim(),
+            title: String(r.title ?? r.package_title ?? "").trim(),
+            subtitle: String(r.subtitle ?? "").trim() || undefined,
+            price_amount: Number(r.price_amount ?? r.price ?? 0),
+            price_unit: String(r.price_unit ?? "DKK/år").trim(),
+            features: Array.isArray(r.features)
+              ? r.features
+              : String(r.features ?? "")
+                  .split("\n")
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+            badge: String(r.badge ?? "").trim() || undefined,
+            order: Number(r.order ?? 999),
+            visible:
+              r.visible === true ||
+              String(r.visible ?? "")
+                .toLowerCase()
+                .trim() === "true",
+          }))
+          .filter((p) => p.key && p.title);
 
-        const mapped: { plan: Plan; order: number }[] = [];
+        mapped.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
-        for (const row of rows) {
-          const visible = String(row.visible ?? row.Visible ?? "")
-            .trim()
-            .toUpperCase();
-          if (visible && visible !== "YES") continue;
+        const visible = mapped.filter((p) => p.visible !== false);
 
-          const rawKey = String(row.package_key ?? row.key ?? "")
-            .trim()
-            .toLowerCase();
-          let key = PLAN_KEYS.find((k) => k === rawKey);
-
-          const titleRaw = String(row.package_title ?? row.title ?? "")
-            .trim()
-            .toLowerCase();
-          if (!key && titleRaw) {
-            if (titleRaw.includes("passiv")) key = "passiv";
-            else if (titleRaw.includes("basis")) key = "basis";
-            else if (titleRaw.includes("aktiv")) key = "aktiv";
-            else if (titleRaw.includes("premium")) key = "premium";
-            else if (titleRaw.includes("ungdom")) key = "ungdom";
-            else if (titleRaw.includes("familie")) key = "familie";
-          }
-
-          if (!key) continue;
-          const fallback = FALLBACK_BY_KEY[key];
-
-          const pakke = String(
-            row.package_title ?? row.title ?? fallback?.pakke ?? key
-          ).trim();
-
-          const audience = String(
-            row.target ??
-              row.audience ??
-              row.segment ??
-              fallback?.audience ??
-              ""
-          ).trim();
-
-          const priceRaw =
-            row.price_amount ??
-            row.price ??
-            row.pris_pr_mdr ??
-            fallback?.pris_pr_mdr ??
-            0;
-          let pris_pr_mdr = Number(priceRaw);
-          if (!Number.isFinite(pris_pr_mdr) || pris_pr_mdr <= 0) {
-            pris_pr_mdr = fallback?.pris_pr_mdr ?? 0;
-          }
-
-          const featuresRaw = String(
-            row.features ??
-              row.feature_list ??
-              row.feature_text ??
-              row.benefits ??
-              ""
-          );
-          const features =
-            featuresRaw.trim().length > 0
-              ? featuresRaw
-                  .split(/[;,\n,]/)
-                  .map((s: string) => s.trim())
-                  .filter(Boolean)
-              : fallback?.features ?? [];
-
-          const badgeRaw =
-            row.badge_label ?? row.ribbon_label ?? fallback?.badge ?? "";
-          const badge = String(badgeRaw).trim() || undefined;
-
-          const order = Number(row.order ?? row.sort ?? row.idx ?? 0) || 0;
-
-          mapped.push({
-            plan: { key, pakke, audience, pris_pr_mdr, features, badge },
-            order,
-          });
+        if (alive) {
+          setPlans(visible);
+          if (!selectedKey && visible[0]?.key) setSelectedKey(visible[0].key);
         }
-
-        if (!mapped.length) {
-          if (!cancelled) setPlans(PLANS);
-          return;
-        }
-
-        const nextPlans = mapped
-          .sort((a, b) => a.order - b.order)
-          .map((m) => m.plan);
-
-        if (!cancelled) {
-          setPlans(nextPlans);
-          setSelectedKey((prev) =>
-            nextPlans.some((p) => p.key === prev)
-              ? prev
-              : nextPlans[0]?.key ?? "basis"
-          );
-        }
-      } catch (err) {
-        console.error("Kunne ikke hente MEDLEMSPAKKER fra Sheet", err);
-        if (!cancelled) setPlans(PLANS);
+      } catch {
+        if (alive) setPlans([]);
       }
     }
 
     load();
     return () => {
-      cancelled = true;
+      alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** [HELP:STATE:SHEETSYNC] END */
+
+  /** [HELP:PRICE] START */
+  const selectedPlan = useMemo(() => {
+    return (plans || []).find((p) => p.key === selectedKey) || null;
+  }, [plans, selectedKey]);
+  /** [HELP:PRICE] END */
+
+  /** [HELP:PLAN:SCROLL] START */
+  function onSelectPlan(key: string) {
+    setSelectedKey(key);
+    requestAnimationFrame(() => {
+      scrollToFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+  /** [HELP:PLAN:SCROLL] END */
 
   // [HELP:FORM:STATE] START
   const [niveau, setNiveau] = useState<(typeof NIVEAUER)[number]>("Hygge");
@@ -281,6 +137,7 @@ export default function BlivMedlem() {
   const [zip, setZip] = useState("");
   const [by, setBy] = useState("");
   const [birth, setBirth] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   // [HELP:FORM:STATE] END
 
   /** [HELP:FORM:NOTE:STATE] START */
@@ -299,52 +156,47 @@ export default function BlivMedlem() {
   const [msg, setMsg] = useState<string | null>(null);
   /** [HELP:FORM:CTA:STATE] END */
 
-  /** [HELP:PRICE] START */
-  const prisMdr = plan.pris_pr_mdr;
-  /** [HELP:PRICE] END */
+  /** [HELP:FORM:ZIPCITY:DATA] START */
+  const citySuggestion = useMemo(() => {
+    const z = zip.trim();
+    if (!z) return "";
+    return ZIP_CITY[z] || "";
+  }, [zip]);
+  /** [HELP:FORM:ZIPCITY:DATA] END */
 
   /** [HELP:FORM:ZIPCITY:FN] START */
-  function onZipChange(v: string) {
-    setZip(v);
-    if (!v) {
-      setBy("");
-      return;
+  useEffect(() => {
+    if (citySuggestion && !by) {
+      setBy(citySuggestion);
     }
-    if (ZIP_TO_CITY[v]) setBy(ZIP_TO_CITY[v]);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [citySuggestion]);
   /** [HELP:FORM:ZIPCITY:FN] END */
 
-  /** [HELP:FORM:FAMILY:SYNC] START */
-  function syncFamCount(target: number) {
-    const needed = Math.max(0, target - 1);
-    setFam((prev) => {
-      const clone = [...prev];
-      if (clone.length < needed) {
-        while (clone.length < needed)
-          clone.push({ first: "", last: "", year: "" });
-      } else if (clone.length > needed) {
-        clone.length = needed;
-      }
-      return clone;
-    });
-  }
-  /** [HELP:FORM:FAMILY:SYNC] END */
+  /** [HELP:FORM:GENDER] START */
+  const genderOptions = KOEN;
+  /** [HELP:FORM:GENDER] END */
 
-  /** [HELP:PLAN:SCROLL] START */
-  const formRef = useRef<HTMLDivElement>(null);
-  function onChoosePlan(key: PlanKey) {
-    setSelectedKey(key);
-    if (key === "familie") syncFamCount(husstand);
-    setTimeout(
-      () =>
-        formRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        }),
-      60
-    );
-  }
-  /** [HELP:PLAN:SCROLL] END */
+  /** [HELP:FORM:LEVELS] START */
+  const levelOptions = NIVEAUER;
+  /** [HELP:FORM:LEVELS] END */
+
+  /** [HELP:FORM:FAMILY:SYNC] START */
+  useEffect(() => {
+    if (!selectedPlan || selectedPlan.key !== "familie") {
+      setFam([]);
+      return;
+    }
+
+    const count = Math.max(2, Number(husstand) || 2);
+    setFam((prev) => {
+      const next = [...prev];
+      while (next.length < count - 1) next.push({ first: "", last: "", year: "" });
+      while (next.length > count - 1) next.pop();
+      return next;
+    });
+  }, [husstand, selectedPlan]);
+  /** [HELP:FORM:FAMILY:SYNC] END */
 
   /** [HELP:FORM:VALIDATION] START */
   const isValid = !!(
@@ -365,14 +217,17 @@ export default function BlivMedlem() {
       setMsg("Udfyld venligst alle felter (bemærkning er valgfri).");
       return;
     }
-    if (!terms) {
-      setMsg("Du skal acceptere Vedtægter og Privatlivspolitik.");
+
+    if (!selectedPlan) {
+      setMsg("Vælg venligst en medlemsform.");
       return;
     }
 
     const payload = {
-      package_id: plan.pakke,
-      price_dkk_per_month: prisMdr,
+      package_id: selectedPlan.title,
+      package_key: selectedPlan.key,
+      price_amount: selectedPlan.price_amount,
+      price_unit: selectedPlan.price_unit || "DKK/år",
       level: niveau,
       gender: koen,
       first_name: fornavn,
@@ -383,10 +238,12 @@ export default function BlivMedlem() {
       zip,
       city: by,
       birth_year: birth,
+      birth_date: birthDate,
       note,
-      household: plan.key === "familie" ? husstand : "",
+      household: selectedPlan.key === "familie" ? husstand : "",
       family_members: fam,
     };
+
     try {
       sessionStorage.setItem("HDK_JOIN_DRAFT", JSON.stringify(payload));
       setBusy(true);
@@ -403,13 +260,14 @@ export default function BlivMedlem() {
       <div className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
         <div className="inline-flex items-center gap-2 text-sm">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
-          <span>Tilmelding</span>
+          <span>Medlemskab</span>
         </div>
-        <h1 className="mt-2 text-2xl font-extrabold">
-          Bliv medlem i Humlum Dartklub
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight">
+          Bliv medlem af Humlum Dartklub
         </h1>
-        <p className="text-sm opacity-70">
-          Vælg den pakke der passer til dig. Du kan altid opgradere senere.
+        <p className="mt-2 text-sm text-slate-700">
+          Vælg den pakke, der matcher dig. Kontingent og indbetaling håndteres i
+          klubben, når vi bekræfter din indmelding.
         </p>
       </div>
 
@@ -430,348 +288,358 @@ export default function BlivMedlem() {
                   {p.badge}
                 </div>
               )}
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs text-black">
-                {p.pakke}
+
+              <div className="flex-1">
+                <h2 className="text-lg font-bold">{p.title}</h2>
+                {p.subtitle && (
+                  <div className="mt-1 text-sm text-slate-600">{p.subtitle}</div>
+                )}
+
+                <div className="mt-4">
+                  <div className="text-3xl font-extrabold">
+                    {p.price_amount}{" "}
+                    <span className="text-sm font-semibold text-slate-500">
+                      {p.price_unit || "DKK/år"}
+                    </span>
+                  </div>
+                </div>
+
+                {p.features && p.features.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                    {p.features.map((f, idx) => (
+                      <li key={idx} className="flex gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <p className="text-sm text-slate-600">{p.audience}</p>
-              <p className="mt-1 text-3xl font-extrabold text-emerald-700">
-                {p.pris_pr_mdr} kr/md.
-              </p>
-              <ul className="mt-3 flex-1 list-disc pl-5 text-sm text-gray-700">
-                {p.features.map((f, i) => (
-                  <li key={i}>{f}</li>
-                ))}
-              </ul>
-              <div className="mt-auto pt-3">
+
+              <div className="mt-4">
                 <button
-                  onClick={() => onChoosePlan(p.key)}
-                  className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-90"
+                  onClick={() => onSelectPlan(p.key)}
+                  className={`w-full rounded-xl px-4 py-2 text-sm font-semibold ${
+                    p.key === selectedKey
+                      ? "bg-emerald-600 text-white"
+                      : "border border-lime-300 bg-white hover:border-emerald-400"
+                  }`}
                 >
-                  Vælg {p.pakke}
+                  {p.key === selectedKey ? "Valgt" : "Vælg denne pakke"}
                 </button>
               </div>
             </article>
           ))
         ) : (
-          <div className="sm:col-span-2 lg:col-span-3 text-sm text-neutral-600">
-            Vi indlæser medlems-pakkerne fra systemet… et øjeblik.
+          <div className="col-span-full rounded-2xl border border-lime-300 bg-white p-4">
+            Henter medlemsformer…
           </div>
         )}
       </section>
 
-      {/* FORM – kun når vi har pakker klar */}
-      {plans && (
-        <section ref={formRef} className="mt-10">
-          <div className="rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
-            <div className="mb-2 inline-flex items-center gap-2 text-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span>Tilmelding</span>
-            </div>
-            <h2 className="text-2xl font-extrabold">Pakke: {plan.pakke}</h2>
-            <p className="text-sm opacity-70">
-              Pris: <b>{prisMdr} kr/md</b> (fast pris
-              {plan.key === "familie" ? " for hele husstanden" : ""}).
-            </p>
-
-            {/* Niveau / køn / husstand */}
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div>
-                <label className="text-sm font-medium">Niveau</label>
-                <select
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={niveau}
-                  onChange={(e) => setNiveau(e.target.value as any)}
-                >
-                  {NIVEAUER.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
+      {/* FORM */}
+      <div ref={scrollToFormRef} className="mt-10">
+        <div className="rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-500">
+                Valgt pakke
               </div>
-
-              <div>
-                <label className="block text-sm font-medium">Køn</label>
-                <div className="mt-1 inline-flex gap-2">
-                  {KOEN.map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setKoen(k)}
-                      className={`rounded-xl border px-3 py-2 text-sm ${
-                        koen === k
-                          ? "bg-emerald-600 text-white"
-                          : "hover:bg-gray-50"
-                      }`}
-                    >
-                      {k}
-                    </button>
-                  ))}
-                  {plan.key === "familie" && (
-                    <div className="ml-2">
-                      <label className="sr-only">Husstand</label>
-                      <select
-                        className="rounded-xl border px-3 py-2 text-sm"
-                        value={husstand}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value, 10);
-                          setHusstand(n);
-                          syncFamCount(n);
-                        }}
-                        title="Antal i husstanden"
-                      >
-                        {[2, 3, 4, 5, 6].map((n) => (
-                          <option key={n} value={n}>
-                            {n} personer
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div aria-hidden />
-            </div>
-
-            {/* Navn + fødselsår */}
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div>
-                <label className="text-sm font-medium">Fornavn</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={fornavn}
-                  onChange={(e) => setFornavn(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Efternavn</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={efternavn}
-                  onChange={(e) => setEfternavn(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Fødselsår</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  placeholder="YYYY"
-                  value={birth}
-                  onChange={(e) => setBirth(e.target.value)}
-                />
+              <div className="text-lg font-bold">
+                {selectedPlan ? selectedPlan.title : "—"}
               </div>
             </div>
-
-            {/* Email / telefon */}
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium">E-mail</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Telefon</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={telefon}
-                  onChange={(e) => setTelefon(e.target.value)}
-                />
-              </div>
+            <div className="text-sm">
+              <span className="font-semibold">
+                {selectedPlan?.price_amount ?? 0}
+              </span>{" "}
+              <span className="text-slate-500">
+                {selectedPlan?.price_unit || "DKK/år"}
+              </span>
             </div>
+          </div>
 
-            {/* Adresse */}
-            <div className="mt-3">
-              <label className="text-sm font-medium">Adresse</label>
-              <input
+          {/* Niveau + køn + husholdning */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="text-sm font-medium">Niveau</label>
+              <select
                 className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={adresse}
-                onChange={(e) => setAdresse(e.target.value)}
-              />
-            </div>
-
-            {/* Postnr / by */}
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div>
-                <label className="text-sm font-medium">Postnr</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  list="zip-suggestions"
-                  value={zip}
-                  onChange={(e) =>
-                    onZipChange(
-                      e.target.value.replace(/\D/g, "").slice(0, 4)
-                    )
-                  }
-                  placeholder="f.eks. 7600"
-                />
-                <datalist id="zip-suggestions">
-                  {ZIP_SUGGESTIONS.map((z) => (
-                    <option key={z} value={z}>
-                      {z} {ZIP_TO_CITY[z]}
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium">By</label>
-                <input
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  value={by}
-                  onChange={(e) => setBy(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Bemærkning */}
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => setNoteOpen((v) => !v)}
-                className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-                aria-expanded={noteOpen}
+                value={niveau}
+                onChange={(e) =>
+                  setNiveau(e.target.value as (typeof NIVEAUER)[number])
+                }
               >
-                Bemærkning (valgfri)
-              </button>
-              {noteOpen && (
-                <div className="mt-2">
-                  <label className="sr-only">Bemærkning (valgfri)</label>
-                  <textarea
-                    className="w-full rounded-xl border px-3 py-2"
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                </div>
+                {levelOptions.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Køn</label>
+              <select
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={koen}
+                onChange={(e) =>
+                  setKoen(e.target.value as (typeof KOEN)[number])
+                }
+              >
+                {genderOptions.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              {selectedPlan?.key === "familie" ? (
+                <>
+                  <label className="text-sm font-medium">Husstand</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <select
+                      className="w-full rounded-xl border px-3 py-2"
+                      value={husstand}
+                      onChange={(e) => setHusstand(Number(e.target.value))}
+                      title="Antal i husstanden"
+                    >
+                      {[2, 3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>
+                          {n} personer
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div aria-hidden />
               )}
             </div>
+          </div>
 
-            {/* Familie-udvidelse */}
-            {plan.key === "familie" && fam.length > 0 && (
-              <div className="mt-6 rounded-2xl border border-lime-300 bg-white p-4">
-                <div className="mb-3 font-semibold">
-                  Ekstra familiemedlemmer
-                </div>
-                <div className="grid gap-3">
-                  {fam.map((m, idx) => (
-                    <div key={idx} className="grid gap-3 sm:grid-cols-3">
-                      <div>
-                        <label className="text-sm font-medium">
-                          Fornavn #{idx + 2}
-                        </label>
-                        <input
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
-                          value={m.first}
-                          onChange={(e) =>
-                            setFam((cur) =>
-                              cur.map((x, i) =>
-                                i === idx
-                                  ? { ...x, first: e.target.value }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">
-                          Efternavn
-                        </label>
-                        <input
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
-                          value={m.last}
-                          onChange={(e) =>
-                            setFam((cur) =>
-                              cur.map((x, i) =>
-                                i === idx
-                                  ? { ...x, last: e.target.value }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">
-                          Fødselsår
-                        </label>
-                        <input
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
-                          placeholder="YYYY"
-                          value={m.year}
-                          onChange={(e) =>
-                            setFam((cur) =>
-                              cur.map((x, i) =>
-                                i === idx
-                                  ? { ...x, year: e.target.value }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* Navn + fødselsinfo */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+            <div>
+              <label className="text-sm font-medium">Fornavn</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={fornavn}
+                onChange={(e) => setFornavn(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Efternavn</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={efternavn}
+                onChange={(e) => setEfternavn(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Fødselsdato</label>
+              <input
+                type="date"
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Fødselsår</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                placeholder="YYYY"
+                value={birth}
+                onChange={(e) => setBirth(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Email / telefon */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium">E-mail</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Telefon (valgfri)</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={telefon}
+                onChange={(e) => setTelefon(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Adresse */}
+          <div className="mt-3">
+            <label className="text-sm font-medium">Adresse</label>
+            <input
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+            />
+          </div>
+
+          {/* Postnr + by */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium">Postnr</label>
+              <input
+                list="zip-suggest"
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+              />
+              <datalist id="zip-suggest">
+                {ZIP_SUGGEST.map((z) => (
+                  <option key={z} value={z} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="text-sm font-medium">By</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={by}
+                onChange={(e) => setBy(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Familie-medlemmer */}
+          {selectedPlan?.key === "familie" && (
+            <div className="mt-4 rounded-xl border border-lime-200 bg-lime-50 p-3">
+              <div className="text-sm font-semibold mb-2">
+                Ekstra familiemedlemmer
               </div>
-            )}
-
-            {/* Accept + CTA */}
-            <div className="mt-2 grid items-center gap-3 sm:grid-cols-[auto,1fr,auto]">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={terms}
-                  onChange={(e) => setTerms(e.target.checked)}
-                />
-                <span className="text-sm">
-                  Jeg har læst og accepterer{" "}
-                  <Link
-                    href="/docs/vedtaegter.pdf"
-                    className="underline"
-                    target="_blank"
-                  >
-                    Vedtægter
-                  </Link>{" "}
-                  og{" "}
-                  <Link href="/privatliv" className="underline" target="_blank">
-                    Privatlivspolitik
-                  </Link>
-                  .
-                </span>
-              </label>
-              <div aria-hidden />
-              <div className="flex justify-end">
-                <button
-                  onClick={goToPayment}
-                  disabled={busy}
-                  className={`rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 ${
-                    isValid ? "bg-emerald-600" : "bg-black"
-                  }`}
-                >
-                  {busy ? "Sender…" : "Fortsæt til betaling"}
-                </button>
+              <div className="grid gap-3">
+                {fam.map((m, idx) => (
+                  <div key={idx} className="grid gap-2 sm:grid-cols-3">
+                    <input
+                      className="rounded-xl border px-3 py-2"
+                      placeholder="Fornavn"
+                      value={m.first}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFam((prev) => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], first: v };
+                          return next;
+                        });
+                      }}
+                    />
+                    <input
+                      className="rounded-xl border px-3 py-2"
+                      placeholder="Efternavn"
+                      value={m.last}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFam((prev) => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], last: v };
+                          return next;
+                        });
+                      }}
+                    />
+                    <input
+                      className="rounded-xl border px-3 py-2"
+                      placeholder="Fødselsår (YYYY)"
+                      value={m.year}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFam((prev) => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], year: v };
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {msg && (
-              <p
-                className={`mt-3 text-sm ${
-                  msg.startsWith("Udfyld") || msg.startsWith("Du skal")
-                    ? "text-red-600"
-                    : "text-emerald-700"
-                }`}
-              >
-                {msg}
-              </p>
+          {/* Bemærkning toggle */}
+          <div className="mt-4">
+            <button
+              type="button"
+              className="text-sm font-semibold underline"
+              onClick={() => setNoteOpen((s) => !s)}
+            >
+              {noteOpen ? "Skjul bemærkning" : "Tilføj bemærkning (valgfri)"}
+            </button>
+            {noteOpen && (
+              <textarea
+                className="mt-2 w-full rounded-xl border px-3 py-2"
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
             )}
           </div>
-        </section>
-      )}
+
+          {/* Vilkår */}
+          <div className="mt-4 flex items-start gap-2">
+            <input
+              id="terms"
+              type="checkbox"
+              className="mt-1"
+              checked={terms}
+              onChange={(e) => setTerms(e.target.checked)}
+            />
+            <label htmlFor="terms" className="text-sm">
+              Jeg accepterer klubbens{" "}
+              <Link
+                href="/privatliv"
+                className="underline text-emerald-700"
+                target="_blank"
+              >
+                privatlivspolitik
+              </Link>
+              .
+            </label>
+          </div>
+
+          {/* CTA */}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="text-xs text-slate-500">
+              Betaling/indbetaling håndteres i klubben efter bekræftet indmelding.
+            </div>
+            <div className="flex justify-end sm:ml-auto">
+              <button
+                onClick={goToPayment}
+                disabled={busy}
+                className={`rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 ${
+                  isValid ? "bg-emerald-600" : "bg-black"
+                }`}
+              >
+                {busy ? "Sender…" : "Fortsæt til betaling"}
+              </button>
+            </div>
+          </div>
+
+          {msg && (
+            <div
+              className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+                msg.includes("Du skal")
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {msg}
+            </div>
+          )}
+        </div>
+      </div>
     </main>
   );
 }

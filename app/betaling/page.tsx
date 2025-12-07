@@ -17,93 +17,66 @@ type FamilyMember = {
 export default function BetalingPage() {
   const router = useRouter();
 
-  /* STATE */
   const [draft, setDraft] = useState<any | null>(null);
-  const [method, setMethod] = useState<Method>("MobilePay");
-  const [freq, setFreq] = useState<"12" | "6" | "4" | "3" | "1">("12");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  /* LOAD DRAFT */
+  const [method, setMethod] = useState<Method>("MobilePay");
+  const [paymentsPerYear, setPaymentsPerYear] = useState(1);
+
   useEffect(() => {
-    const t = sessionStorage.getItem("HDK_JOIN_DRAFT");
-    const data = t ? JSON.parse(t) : null;
-    setDraft(data);
-    const hasMp =
-      (process.env.NEXT_PUBLIC_MOBILEPAY_LINK || "").trim().length > 0;
-    setMethod(hasMp ? "MobilePay" : "Kontant");
+    const raw = sessionStorage.getItem("HDK_JOIN_DRAFT");
+    if (!raw) {
+      setDraft(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      setDraft(parsed || null);
+    } catch {
+      setDraft(null);
+    }
   }, []);
 
-  /* PRICES */
-  const priceMonth = useMemo(
-    () => Number((draft as any)?.price_dkk_per_month || 0),
-    [draft]
-  );
-  const paymentsPerYear = useMemo(() => Number(freq), [freq]);
-  const amountPerPayment = useMemo(
-    () => priceMonth * (12 / paymentsPerYear),
-    [priceMonth, paymentsPerYear]
-  );
-  const totalPerYear = useMemo(() => priceMonth * 12, [priceMonth]);
+  const totalPerYear = useMemo(() => {
+    const amount = Number(draft?.price_amount ?? 0);
+    return Number.isFinite(amount) ? amount : 0;
+  }, [draft]);
 
-  /* FAMILY MEMBERS – primær + ekstra (hovedmedlem + øvrige) */
-  const allFamilyMembers = useMemo(() => {
+  const amountPerPayment = useMemo(() => {
+    if (!paymentsPerYear || paymentsPerYear <= 0) return totalPerYear;
+    return Math.round((totalPerYear / paymentsPerYear) * 100) / 100;
+  }, [totalPerYear, paymentsPerYear]);
+
+  const allFamilyMembers: FamilyMember[] = useMemo(() => {
+    if (!draft) return [];
+
     const anyDraft = draft as any;
-    const list: FamilyMember[] = [];
-    if (!anyDraft) return list;
 
-    // Hovedmedlem (den der udfylder formularen)
-    const primaryFirst = String(anyDraft.first_name ?? "").trim();
-    const primaryLast = String(anyDraft.last_name ?? "").trim();
     const primaryYear = String(anyDraft.birth_year ?? "").trim();
+    const primary = {
+      firstName: String(anyDraft.first_name ?? "").trim(),
+      lastName: String(anyDraft.last_name ?? "").trim(),
+      birthYear: primaryYear,
+      isPrimary: true,
+    } as FamilyMember;
 
-    if (primaryFirst || primaryLast || primaryYear) {
-      list.push({
-        firstName: primaryFirst,
-        lastName: primaryLast,
-        birthYear: primaryYear,
-        isPrimary: true,
-      });
+    const list: FamilyMember[] = [primary];
+
+    const fam = Array.isArray(anyDraft.family_members)
+      ? anyDraft.family_members
+      : [];
+
+    for (const m of fam) {
+      const firstName = String(m.first ?? m.first_name ?? "").trim();
+      const lastName = String(m.last ?? m.last_name ?? "").trim();
+      const birthYear = String(m.year ?? m.birth_year ?? "").trim();
+
+      list.push({ firstName, lastName, birthYear });
     }
 
-    // Øvrige familiemedlemmer fra family_members-listen (fra /bliv-medlem)
-    const raw =
-      anyDraft.family_members ??
-      anyDraft.familyMembers ??
-      anyDraft.family ??
-      null;
-
-    if (Array.isArray(raw)) {
-      const extras = raw
-        .map((m: any) => ({
-          firstName: String(
-            m.first_name ??
-              m.firstName ??
-              m.first ??
-              m.fornavn ??
-              ""
-          ).trim(),
-          lastName: String(
-            m.last_name ??
-              m.lastName ??
-              m.last ??
-              m.efternavn ??
-              ""
-          ).trim(),
-          birthYear: String(
-            m.birth_year ??
-              m.birthYear ??
-              m.year ??
-              m.foedselsaar ??
-              ""
-          ).trim(),
-        }))
-        .filter((m) => m.firstName || m.lastName || m.birthYear);
-      list.push(...extras);
-    }
-
-    return list;
+    return list.filter((m) => m.firstName || m.lastName || m.birthYear);
   }, [draft]);
 
   const householdCount = useMemo(() => {
@@ -118,6 +91,7 @@ export default function BetalingPage() {
     if (!draft) return;
     setMsg(null);
     setBusy(true);
+
     try {
       const payload = {
         ...(draft as any),
@@ -139,7 +113,7 @@ export default function BetalingPage() {
       const text = await res.text();
       let data: any = null;
       try {
-        data = JSON.parse(text);
+        data = text ? JSON.parse(text) : null;
       } catch {
         data = null;
       }
@@ -148,42 +122,21 @@ export default function BetalingPage() {
         throw new Error(
           (data && (data.error || data.message)) ||
             text ||
-            `Kunne ikke gemme (HTTP ${res.status})`
+            `HTTP ${res.status}`
         );
       }
 
-      setDone(true);
       sessionStorage.removeItem("HDK_JOIN_DRAFT");
-    } catch (e: any) {
-      setMsg(e?.message || "Der skete en fejl.");
+      setDone(true);
+    } catch (err: any) {
+      setMsg(err?.message || "Der opstod en fejl. Prøv igen.");
     } finally {
       setBusy(false);
     }
   }
 
-  /* NO DRAFT */
-  if (!draft) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
-        <div className="section-header">
-          <div className="kicker">
-            <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
-          </div>
-          <h1 className="section-title">Mangler oplysninger</h1>
-          <div className="section-underline" />
-        </div>
-        <p className="text-slate-700">Start forfra på tilmeldingen.</p>
-        <div className="mt-4">
-          <a className="btn btn-primary" href="/bliv-medlem">
-            Tilbage til Bliv medlem
-          </a>
-        </div>
-      </main>
-    );
-  }
-
-  /* DONE VIEW */
-  if (done) {
+  // SUCCESS VIEW
+  if (done && draft) {
     return (
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
         <div className="section-header">
@@ -196,7 +149,7 @@ export default function BetalingPage() {
         <p className="text-slate-700 mt-4">
           Vi har modtaget din ansøgning til{" "}
           <b>{(draft as any).package_id}</b>. Du får en bekræftelse pr. e-mail,
-          og vi kontakter dig, når betalingen er registreret.
+          og vi kontakter dig om den praktiske betaling i klubben.
         </p>
       </main>
     );
@@ -210,8 +163,14 @@ export default function BetalingPage() {
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
         </div>
-        <h1 className="section-title">Vælg betalingsmetode og frekvens</h1>
+        <h1 className="section-title">
+          Oplys ønsket betalingsmetode og frekvens
+        </h1>
         <div className="section-underline" />
+        <p className="mt-2 text-sm text-slate-700">
+          Kontingent og indbetaling håndteres i klubben. Her angiver du blot
+          dine ønsker, så vi kan registrere din tilmelding korrekt.
+        </p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 mt-6">
@@ -222,96 +181,108 @@ export default function BetalingPage() {
           <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl border p-3">
               <div className="text-slate-500">Pakke</div>
-              <div className="font-semibold">{(draft as any).package_id}</div>
+              <div className="font-semibold">{(draft as any)?.package_id}</div>
             </div>
             <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Pris pr. måned</div>
-              <div className="font-semibold">{priceMonth} kr</div>
-            </div>
-            <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Samlet pr. år</div>
-              <div className="font-semibold">{totalPerYear} kr</div>
-            </div>
-            <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Betalingsfrekvens</div>
-              <div className="font-semibold">{paymentsPerYear}× pr. år</div>
-            </div>
-            <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Beløb pr. betaling</div>
-              <div className="font-semibold">{amountPerPayment} kr</div>
-            </div>
-            <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Navn</div>
-              <div className="font-semibold">
-                {(draft as any).first_name} {(draft as any).last_name}
-              </div>
+              <div className="text-slate-500">Årligt kontingent</div>
+              <div className="font-semibold">{totalPerYear} DKK</div>
             </div>
           </div>
 
-          {/* FAMILIEMEDLEMMER */}
-          {allFamilyMembers.length > 0 && (
-            <div className="mt-4">
-              <h3 className="font-semibold mb-1">
-                Familiemedlemmer ({householdCount})
-              </h3>
-              <p className="text-xs text-slate-500 mb-1">
-                Tjek at alle familiemedlemmer er med – fx 2 voksne + 2 børn
-                eller 1 voksen + 1–3 børn, før du bekræfter.
-              </p>
-              <ul className="list-disc pl-6 text-sm space-y-0.5">
-                {allFamilyMembers.map((m, i) => {
-                  const name = `${m.firstName} ${m.lastName}`.trim();
-                  return (
-                    <li key={i}>
-                      {name || "Navn mangler"}
-                      {m.birthYear && ` — ${m.birthYear}`}
-                      {m.isPrimary && " (hovedmedlem)"}
-                    </li>
-                  );
-                })}
-              </ul>
+          <div className="mt-4 rounded-xl border p-3">
+            <div className="text-slate-500 text-sm">Medlem(mer)</div>
+            <div className="mt-2 space-y-1 text-sm">
+              {allFamilyMembers.length > 0 ? (
+                allFamilyMembers.map((m, idx) => (
+                  <div key={idx}>
+                    <span className="font-semibold">
+                      {m.firstName} {m.lastName}
+                    </span>
+                    {m.birthYear && ` — ${m.birthYear}`}
+                    {m.isPrimary && (
+                      <span className="ml-2 text-xs text-emerald-700">
+                        (Primær)
+                      </span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div>—</div>
+              )}
             </div>
-          )}
+            <div className="mt-2 text-xs text-slate-500">
+              Husstand: {householdCount}
+            </div>
+          </div>
         </section>
 
         {/* BETALINGSVALG */}
         <aside className="card">
-          <h2 className="text-lg font-semibold">Vælg betaling</h2>
+          <div className="kicker">
+            <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
+          </div>
+          <h2 className="text-lg font-semibold">
+            Vælg betalingsønsker
+          </h2>
 
-          <label className="block text-sm font-medium mt-3">
-            Betalingsmetode
-          </label>
-          <select
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            value={method}
-            onChange={(e) => setMethod(e.target.value as Method)}
-          >
-            <option>MobilePay</option>
-            <option>Kontant</option>
-            <option>Bankoverførsel</option>
-          </select>
-
-          <label className="block text-sm font-medium mt-4">Frekvens</label>
-          <select
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            value={freq}
-            onChange={(e) => setFreq(e.target.value as any)}
-          >
-            <option value="12">12× (månedligt)</option>
-            <option value="6">6× (hver 2. måned)</option>
-            <option value="4">4× (kvartalsvis)</option>
-            <option value="3">3× (hver 4. måned)</option>
-            <option value="1">1× (årligt)</option>
-          </select>
-
-          <div className="mt-4 rounded-xl border p-3 text-sm">
-            <div className="text-slate-500">Du betaler</div>
-            <div className="font-semibold">
-              {amountPerPayment} kr {paymentsPerYear}× pr. år
+          <div className="mt-3 rounded-xl border p-3">
+            <div className="text-slate-500">Betalingsmetode</div>
+            <div className="mt-2 flex flex-col gap-2">
+              {(["MobilePay", "Kontant", "Bankoverførsel"] as Method[]).map(
+                (m) => (
+                  <label
+                    key={m}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="radio"
+                      name="method"
+                      checked={method === m}
+                      onChange={() => setMethod(m)}
+                    />
+                    <span>{m}</span>
+                  </label>
+                )
+              )}
             </div>
           </div>
 
-          {msg && <p className="mt-3 text-sm text-red-600">{msg}</p>}
+          <div className="mt-3 rounded-xl border p-3">
+            <div className="text-slate-500">Betalingsfrekvens</div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {[1, 2, 4].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPaymentsPerYear(n)}
+                  className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                    paymentsPerYear === n
+                      ? "border-emerald-500 bg-emerald-50"
+                      : "hover:border-emerald-300"
+                  }`}
+                >
+                  {n}x / år
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 grid gap-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500">Beløb pr. betaling</div>
+                <div className="font-semibold">{amountPerPayment} DKK</div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500">Årligt kontingent</div>
+                <div className="font-semibold">{totalPerYear} DKK</div>
+              </div>
+            </div>
+          </div>
+
+          {msg && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {msg}
+            </div>
+          )}
 
           <div className="mt-4 flex gap-2">
             <button

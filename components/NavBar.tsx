@@ -11,6 +11,17 @@ export default function NavBar() {
   const [open, setOpen] = useState(false);
   /* [HELP:NAV:STATE] END */
 
+  /* [HELP:NAV:LABELS] START — små badges til WIP-sider */
+  const academyLabel = (
+    <span className="inline-flex items-center gap-2">
+      <span>Humlum Dart Academy</span>
+      <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
+        Kommer snart
+      </span>
+    </span>
+  );
+  /* [HELP:NAV:LABELS] END */
+
   // [HELP:NAV:RENDER] START — header + nav
   return (
     <header className="w-full">
@@ -45,8 +56,9 @@ export default function NavBar() {
           <Link href="/">Forside</Link>
           <Link href="/om">Om klubben</Link>
           <Link href="/sponsor">Sponsor</Link>
+          <Link href="/sponsorvaeg">Sponsorvæg</Link>
           <Link href="/events">Events</Link>
-          <Link href="/academy">Humlum Dart Academy</Link>
+          <Link href="/academy">{academyLabel}</Link>
 
           <Link
             href="/admin/login"
@@ -116,6 +128,13 @@ export default function NavBar() {
               </Link>
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
+                href="/sponsorvaeg"
+                onClick={() => setOpen(false)}
+              >
+                Sponsorvæg
+              </Link>
+              <Link
+                className="px-4 py-3 hover:bg-gray-50"
                 href="/events"
                 onClick={() => setOpen(false)}
               >
@@ -126,7 +145,12 @@ export default function NavBar() {
                 href="/academy"
                 onClick={() => setOpen(false)}
               >
-                Humlum Dart Academy
+                <span className="inline-flex items-center gap-2">
+                  <span>Humlum Dart Academy</span>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
+                    Kommer snart
+                  </span>
+                </span>
               </Link>
               <Link
                 className="px-4 py-3 text-xs text-neutral-500 hover:bg-gray-50"
