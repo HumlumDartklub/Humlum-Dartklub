@@ -1,42 +1,25 @@
 "use client";
 
-/* [HELP:ABOUT:IMPORTS] START */
+/** [HELP:OM:IMPORTS] START */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-/* [HELP:ABOUT:IMPORTS] END */
+/** [HELP:OM:IMPORTS] END */
 
-/* [HELP:ABOUT:TYPES] START — typer & strukturer */
-type Member = { role: string; name: string; email?: string; phone?: string };
-/* [HELP:ABOUT:TYPES] END */
+/** [HELP:OM:TYPES] START */
+type OmRow = {
+  key?: string;
+  section?: string;
+  title?: string;
+  subtitle?: string;
+  body?: string;
+  link_label?: string;
+  link_url?: string;
+  icon?: string;
+  group?: string;
+  visible?: any;
+  order?: any;
+};
 
-/* [HELP:ABOUT:VALUES] START — klubværdier (liste) */
-const VALUES = [
-  { title: "Fællesskab", text: "Alle skal kunne være med og føle sig velkomne." },
-  { title: "Præcision", text: "Vi træner klogt, måler fremskridt og deler læring." },
-  { title: "Respekt", text: "Fairplay, ordentlig tone og plads til forskellighed." },
-  { title: "Frivillighed", text: "Vi bygger klubben sammen – med tid, idéer og energi." },
-];
-/* [HELP:ABOUT:VALUES] END */
-
-/* [HELP:ABOUT:TRAIN:CONFIG] START */
-const TRAIN_RULES = [
-  { weekday: 2, timeHHMM: "19:00", label: "Tirsdag 19:00" },
-  { weekday: 4, timeHHMM: "19:00", label: "Torsdag 19:00" },
-];
-/* [HELP:ABOUT:TRAIN:CONFIG] END */
-
-/* [HELP:ABOUT:BOARD] START — bestyrelse (kan senere flyttes til Sheet) */
-const BOARD: Member[] = [
-  { role: "Formand", name: "Ernst" },
-  { role: "Kasserer", name: "Søren" },
-  { role: "Bestyrelsesmedlem", name: "Jeppe" },
-  { role: "Suppleant", name: "Martin" },
-  { role: "Suppleant", name: "Villy" },
-  { role: "Revisor", name: "Kasper" },
-];
-/* [HELP:ABOUT:BOARD] END */
-
-/* [HELP:ABOUT:TRYOUT:TYPES] START */
 type TryoutRow = {
   key?: string;
   date?: string;
@@ -54,12 +37,53 @@ type TryoutRow = {
   visible?: any;
   order?: any;
 };
-/* [HELP:ABOUT:TRYOUT:TYPES] END */
 
-/* [HELP:ABOUT:TRYOUT:UTIL] START */
+type ClubKVRow = {
+  key?: string;
+  value?: any;
+  type?: string;
+  group?: string;
+  help?: string;
+  visible?: any;
+  order?: any;
+};
+/** [HELP:OM:TYPES] END */
+
+/** [HELP:OM:BOARD] START */
+const BOARD = [
+  { role: "Formand", name: "Ernst" },
+  { role: "Kasserer", name: "Søren" },
+  { role: "Bestyrelsesmedlem", name: "Jeppe" },
+  { role: "Bestyrelsesmedlem", name: "Lars" },
+  { role: "Bestyrelsesmedlem", name: "Lars" },
+  { role: "Suppleant", name: "Martin" },
+  { role: "Suppleant", name: "Villy" },
+  { role: "Revisor", name: "Kasper" },
+];
+/** [HELP:OM:BOARD] END */
+
+/** [HELP:OM:VALUES:FALLBACK] START */
+const VALUES_FALLBACK = [
+  "Fællesskab – alle skal kunne være med og føle sig velkomne.",
+  "Præcision – vi træner klogt, måler fremskridt og deler læring.",
+  "Respekt – fairplay, ordentlig tone og plads til forskellighed.",
+  "Frivillighed – vi bygger klubben sammen med tid, idéer og energi.",
+];
+/** [HELP:OM:VALUES:FALLBACK] END */
+
+/** [HELP:OM:UTILS] START */
 function isYes(v: any) {
   const s = String(v ?? "").trim().toLowerCase();
   return s === "yes" || s === "ja" || s === "true" || s === "1";
+}
+
+function toNum(v: any, d = 999) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+function isExternal(url: string) {
+  return /^https?:\/\//i.test(url);
 }
 
 function compactTryoutLabel(r: TryoutRow) {
@@ -72,9 +96,22 @@ function compactTryoutLabel(r: TryoutRow) {
   if (wd) return wd;
   return "";
 }
-/* [HELP:ABOUT:TRYOUT:UTIL] END */
 
-/* [HELP:ABOUT:API] START */
+function safeText(v: any) {
+  const s = String(v ?? "").trim();
+  return s;
+}
+/** [HELP:OM:UTILS] END */
+
+/** [HELP:OM:API] START */
+async function fetchSheet(tab: string, limit = 200) {
+  const res = await fetch(`/api/sheet?tab=${tab}&limit=${limit}`, {
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => null);
+  return (data?.items || []) as any[];
+}
+
 async function createTryoutBooking(payload: {
   date: string;
   time: string;
@@ -100,11 +137,15 @@ async function createTryoutBooking(payload: {
   }
   return data;
 }
-/* [HELP:ABOUT:API] END */
+/** [HELP:OM:API] END */
 
-/* [HELP:ABOUT:COMP] START */
 export default function OmPage() {
-  /* [HELP:ABOUT:STATE] START */
+  /** [HELP:OM:STATE] START */
+  const [omRows, setOmRows] = useState<OmRow[]>([]);
+  const [tryoutRows, setTryoutRows] = useState<TryoutRow[]>([]);
+  const [clubKv, setClubKv] = useState<Record<string, string>>({});
+
+  // booking modal
   const [showBooking, setShowBooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -117,90 +158,203 @@ export default function OmPage() {
 
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+  /** [HELP:OM:STATE] END */
 
-  const [tryoutRows, setTryoutRows] = useState<TryoutRow[]>([]);
-  /* [HELP:ABOUT:STATE] END */
-
-  const showBoardContacts = useMemo(
-    () => BOARD.some((m) => m.email || m.phone),
-    []
-  );
-
-  /* [HELP:ABOUT:EFFECT:TRYOUT_SHEET] START */
+  /** [HELP:OM:EFFECTS:LOAD] START */
   useEffect(() => {
     let alive = true;
 
-    async function loadTryouts() {
+    async function loadAll() {
       try {
-        const res = await fetch("/api/sheet?tab=PROEVETRAENING&limit=200", {
-          cache: "no-store",
-        });
-        const data = await res.json().catch(() => null);
-        const items: TryoutRow[] = data?.items || [];
+        const [om, tryouts, klubinfo] = await Promise.all([
+          fetchSheet("OM_KLUBBEN", 400),
+          fetchSheet("PROEVETRAENING", 200),
+          fetchSheet("Klubinfo", 200),
+        ]);
 
-        const filtered = items
-          .filter((r) => isYes(r.visible))
+        const omParsed: OmRow[] = (om as OmRow[])
+          .map((r) => ({ ...r, order: toNum((r as any).order) }))
+          .sort((a, b) => toNum(a.order) - toNum(b.order));
+
+        const tryParsed: TryoutRow[] = (tryouts as TryoutRow[])
+          .filter((r) => isYes((r as any).visible))
           .filter((r) => {
-            const s = String(r.status ?? "").trim().toLowerCase();
+            const s = String((r as any).status ?? "").trim().toLowerCase();
             return !s || s === "open" || s === "åben";
           })
-          .map((r) => ({
-            ...r,
-            order: Number(r.order ?? 999),
-          }))
-          .sort((a, b) => Number(a.order) - Number(b.order));
+          .map((r) => ({ ...r, order: toNum((r as any).order) }))
+          .sort((a, b) => toNum(a.order) - toNum(b.order));
+
+        const kvRows = (klubinfo as ClubKVRow[]).filter((r) =>
+          isYes((r as any).visible)
+        );
+
+        const dict: Record<string, string> = {};
+        for (const r of kvRows) {
+          const k = safeText((r as any).key);
+          const v = safeText((r as any).value);
+          if (k) dict[k] = v;
+        }
 
         if (!alive) return;
-        setTryoutRows(filtered);
+        setOmRows(omParsed);
+        setTryoutRows(tryParsed);
+        setClubKv(dict);
       } catch {
         if (!alive) return;
+        setOmRows([]);
         setTryoutRows([]);
+        setClubKv({});
       }
     }
 
-    loadTryouts();
+    loadAll();
     return () => {
       alive = false;
     };
   }, []);
-  /* [HELP:ABOUT:EFFECT:TRYOUT_SHEET] END */
+  /** [HELP:OM:EFFECTS:LOAD] END */
 
-  /* [HELP:ABOUT:DERIVED:TRYOUT_DAYS] START */
+  /** [HELP:OM:DERIVED:OM_KEYS] START */
+  const introMain = useMemo(
+    () => omRows.find((r) => r.key === "intro_main"),
+    [omRows]
+  );
+
+  const topNav = useMemo(
+    () =>
+      omRows
+        .filter((r) => String(r.section) === "top_nav")
+        .filter((r) => isYes(r.visible))
+        .sort((a, b) => toNum(a.order) - toNum(b.order)),
+    [omRows]
+  );
+
+  const introNav = useMemo(
+    () =>
+      omRows
+        .filter((r) => String(r.section) === "intro_nav")
+        .filter((r) => isYes(r.visible))
+        .sort((a, b) => toNum(a.order) - toNum(b.order)),
+    [omRows]
+  );
+
+  const cardValues = useMemo(
+    () => omRows.find((r) => r.key === "card_values"),
+    [omRows]
+  );
+  const cardBoard = useMemo(
+    () => omRows.find((r) => r.key === "card_board"),
+    [omRows]
+  );
+  const cardDocuments = useMemo(
+    () => omRows.find((r) => r.key === "card_documents"),
+    [omRows]
+  );
+  const cardFindus = useMemo(
+    () => omRows.find((r) => r.key === "card_findus"),
+    [omRows]
+  );
+
+  const contactIntro = useMemo(
+    () => omRows.find((r) => r.key === "contact_intro"),
+    [omRows]
+  );
+  /** [HELP:OM:DERIVED:OM_KEYS] END */
+
+  /** [HELP:OM:DERIVED:CLUBINFO] START */
+  const clubName =
+    clubKv["club.name"] || clubKv["club_name"] || "Humlum Dartklub";
+
+  const clubTagline =
+    clubKv["club.tagline"] || clubKv["club_tagline"] || "";
+
+  const clubDescription =
+    clubKv["club.description"] ||
+    clubKv["club_description"] ||
+    safeText(introMain?.body) ||
+    "";
+
+  const clubEmail =
+    clubKv["club.email"] || clubKv["club_email"] || "humlumdartklub@gmail.com";
+
+  const clubPhone = clubKv["club.phone"] || clubKv["club_phone"] || "";
+
+  const clubCvr = clubKv["club.cvr"] || clubKv["club_cvr"] || "";
+
+  const clubAddress = clubKv["club.address"] || clubKv["club_address"] || "";
+  const clubPostcode =
+    clubKv["club.postcode"] || clubKv["club_postcode"] || "";
+  const clubCity = clubKv["club.city"] || clubKv["club_city"] || "";
+
+  const venueName = clubKv["venue.name"] || clubKv["venue_name"] || "";
+  const venueAddress =
+    clubKv["venue.address"] || clubKv["venue_address"] || "";
+  const venuePostcode =
+    clubKv["venue.postcode"] || clubKv["venue_postcode"] || "";
+  const venueCity = clubKv["venue.city"] || clubKv["venue_city"] || "";
+
+  const facebook = clubKv["social.facebook"] || "";
+  const website = clubKv["social.website"] || "";
+
+  const addressLine = useMemo(() => {
+    const addr = clubAddress.trim();
+    const end = [clubPostcode.trim(), clubCity.trim()].filter(Boolean).join(" ");
+    return [addr, end].filter(Boolean).join(", ");
+  }, [clubAddress, clubPostcode, clubCity]);
+
+  const venueLine = useMemo(() => {
+    const vAddr = venueAddress.trim();
+    const vEnd = [venuePostcode.trim(), venueCity.trim()]
+      .filter(Boolean)
+      .join(" ");
+    const vLine = [vAddr, vEnd].filter(Boolean).join(", ");
+    return vLine;
+  }, [venueAddress, venuePostcode, venueCity]);
+
+  const topnavFindusUrl =
+    (topNav.find((r) => r.key === "topnav_findus")?.link_url || "").trim();
+
+  const mapsUrl = useMemo(() => {
+    if (topnavFindusUrl && isExternal(topnavFindusUrl)) return topnavFindusUrl;
+    if (addressLine) {
+      const q = encodeURIComponent(addressLine);
+      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+    }
+    if (venueLine) {
+      const q = encodeURIComponent(venueLine);
+      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+    }
+    return "";
+  }, [topnavFindusUrl, addressLine, venueLine]);
+  /** [HELP:OM:DERIVED:CLUBINFO] END */
+
+  /** [HELP:OM:DERIVED:TRYOUT_DAYS] START */
   const tryoutDayLabels = useMemo(() => {
-    // Primært fra Sheet
-    const labels = tryoutRows
-      .map(compactTryoutLabel)
-      .filter(Boolean);
-
-    if (labels.length > 0) return labels;
-
-    // Fallback til hardcoded
-    return TRAIN_RULES.map((r) => r.label);
+    const labels = tryoutRows.map(compactTryoutLabel).filter(Boolean);
+    return labels.length ? labels : ["Tirsdag 19:00-21:00", "Torsdag 19:00-21:00"];
   }, [tryoutRows]);
-  /* [HELP:ABOUT:DERIVED:TRYOUT_DAYS] END */
+  /** [HELP:OM:DERIVED:TRYOUT_DAYS] END */
 
-  /* [HELP:ABOUT:HANDLERS:NAV] START */
+  /** [HELP:OM:SCROLL] START */
   const go = useCallback((id: string) => {
-    const el = document.getElementById(id);
+    const clean = id.startsWith("#") ? id.slice(1) : id;
+    const el = document.getElementById(clean);
     if (!el) return;
     const y = el.getBoundingClientRect().top + window.scrollY - 96;
     window.scrollTo({ top: y, behavior: "smooth" });
   }, []);
-  /* [HELP:ABOUT:HANDLERS:NAV] END */
+  /** [HELP:OM:SCROLL] END */
 
-  /* [HELP:ABOUT:HANDLERS:OPEN] START */
+  /** [HELP:OM:BOOKING:HANDLERS] START */
   const openBooking = useCallback(() => {
     setShowBooking(true);
     setMsg(null);
     setSuccess(false);
   }, []);
 
-  const closeBooking = useCallback(() => {
-    setShowBooking(false);
-  }, []);
-  /* [HELP:ABOUT:HANDLERS:OPEN] END */
+  const closeBooking = useCallback(() => setShowBooking(false), []);
 
-  /* [HELP:ABOUT:HANDLERS:SUBMIT] START */
   async function submitBooking() {
     setMsg(null);
 
@@ -239,56 +393,127 @@ export default function OmPage() {
       setBusy(false);
     }
   }
-  /* [HELP:ABOUT:HANDLERS:SUBMIT] END */
+  /** [HELP:OM:BOOKING:HANDLERS] END */
 
-  /* [HELP:ABOUT:LAYOUT] START */
+  /** [HELP:OM:RENDER:TOPNAV_ITEM] START */
+  function renderTopNavItem(r: OmRow) {
+    const label = safeText(r.link_label || r.title || "");
+    const url = safeText(r.link_url || "");
+    if (!label || !url) return null;
+
+    if (url.startsWith("#")) {
+      return (
+        <button
+          key={r.key || label}
+          type="button"
+          onClick={() => go(url)}
+          className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+        >
+          {label}
+        </button>
+      );
+    }
+
+    if (isExternal(url)) {
+      return (
+        <a
+          key={r.key || label}
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-xl border px=3 py-2 text-xs font-semibold hover:bg-gray-50"
+          style={{ padding: "0.5rem 0.75rem" }}
+        >
+          {label}
+        </a>
+      );
+    }
+
+    // special-case prøvetræning knap hvis link er /proevetraening eller key topnav_tryout
+    if (r.key === "topnav_tryout") {
+      return (
+        <button
+          key={r.key}
+          type="button"
+          onClick={openBooking}
+          className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+        >
+          {label}
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        key={r.key || label}
+        href={url}
+        className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+      >
+        {label}
+      </Link>
+    );
+  }
+  /** [HELP:OM:RENDER:TOPNAV_ITEM] END */
+
+  /** [HELP:OM:RENDER:INTRONAV_ITEM] START */
+  function renderIntroNavItem(r: OmRow) {
+    const label = safeText(r.link_label || r.title || "");
+    const url = safeText(r.link_url || "");
+    if (!label || !url) return null;
+
+    if (url.startsWith("#")) {
+      return (
+        <button
+          key={r.key || label}
+          type="button"
+          onClick={() => go(url)}
+          className="rounded-xl border px-3 py-2 text-[11px] font-semibold hover:bg-gray-50"
+        >
+          {label}
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        key={r.key || label}
+        href={url}
+        className="rounded-xl border px-3 py-2 text-[11px] font-semibold hover:bg-gray-50"
+      >
+        {label}
+      </Link>
+    );
+  }
+  /** [HELP:OM:RENDER:INTRONAV_ITEM] END */
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      {/* HERO */}
+      {/* [HELP:OM:HERO] START */}
       <section className="mb-8 rounded-2xl border border-lime-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="kicker mb-2 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-lime-500" />
-              <span>Om klubben</span>
+              <span>{safeText(introMain?.title) || "Om klubben"}</span>
             </div>
+
             <h1 className="text-2xl font-extrabold tracking-tight">
-              Humlum Dartklub
+              {clubName}
             </h1>
-            <p className="mt-2 text-sm text-gray-700 max-w-2xl">
-              Humlum Dartklub er en ny, lokal forening med fokus på fællesskab,
-              udvikling og god dartkultur. Vi vil skabe et trygt og moderne
-              klubmiljø, hvor både nybegyndere, familier og erfarne
-              turneringsspillere føler sig hjemme. <br />
-              Hos os handler det ikke kun om at ramme skiven – men om at blive
-              en del af et fællesskab, der løfter hinanden. Vi bygger klubben op
-              i et tempo, hvor kvalitet, frivillighed og gode oplevelser går hånd
-              i hånd, så træning og events kan vokse sammen med medlemmerne.
+
+            {clubTagline && (
+              <div className="mt-1 text-sm text-gray-600">{clubTagline}</div>
+            )}
+
+            <p className="mt-2 text-sm text-gray-700 max-w-2xl whitespace-pre-line">
+              {safeText(introMain?.body) || clubDescription}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => go("klubinfo")}
-              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
-            >
-              Klubinfo
-            </button>
-            <button
-              type="button"
-              onClick={() => go("traening")}
-              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
-            >
-              Træning
-            </button>
-            <button
-              type="button"
-              onClick={() => go("medlemskab")}
-              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
-            >
-              Medlemskab
-            </button>
+            {topNav.map(renderTopNavItem)}
+
+            {/* faste CTA'er (beholdt) */}
             <Link
               href="/sponsor"
               className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
@@ -303,177 +528,208 @@ export default function OmPage() {
             </Link>
           </div>
         </div>
-      </section>
 
-      {/* GRID KORT */}
+        {introNav.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {introNav.map(renderIntroNavItem)}
+          </div>
+        )}
+      </section>
+      {/* [HELP:OM:HERO] END */}
+
+      {/* [HELP:OM:CARDS:TOPROW] START */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
         {/* VÆRDIER */}
-        <section id="vaerdier" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>VÆRDIER</span>
+        {isYes(cardValues?.visible) && (
+          <section id="vaerdier" className="card h-full min-h-[84px]">
+            <details className="group" open>
+              <summary className="cursor-pointer list-none">
+                <div className="kicker mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-lime-500" />
+                    <span>{safeText(cardValues?.title) || "Værdier"}</span>
+                  </div>
+                  <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                    ▾
+                  </span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
-                  ▾
-                </span>
-              </div>
-            </summary>
-            <div className="space-y-3 text-sm text-gray-800">
-              {VALUES.map((v) => (
-                <div key={v.title}>
-                  <div className="font-semibold">{v.title}</div>
-                  <div className="text-gray-700">{v.text}</div>
-                </div>
-              ))}
-            </div>
-          </details>
-        </section>
-
-        {/* KLUBINFO */}
-        <section id="klubinfo" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>KLUBINFO</span>
-                </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
-                  ▾
-                </span>
-              </div>
-            </summary>
-
-            <div className="space-y-3 text-sm text-gray-800">
-              <p>
-                Humlum Dartklub arbejder for at skabe et stærkt lokalt
-                foreningsmiljø med plads til både hygge og ambition.
-              </p>
-              <p>
-                Vi prioriterer en god opstartsramme med klare værdier,
-                inkluderende træning og en sund klubkultur, hvor nye og erfarne
-                spillere udvikler sig side om side.
-              </p>
-
-              <div className="mt-3 rounded-xl border bg-gray-50 p-3">
-                <div className="font-semibold mb-2">Bestyrelse</div>
-                <div className="overflow-x-auto text-sm text-gray-800">
-                  <table className="min-w-full border-separate border-spacing-y-1">
-                    <tbody>
-                      {BOARD.map((m, i) => (
-                        <tr key={`${m.role}-${m.name}-${i}`} className="align-top">
-                          <td className="pr-2 font-semibold whitespace-nowrap">
-                            {m.role}
-                          </td>
-                          <td className="pr-2 whitespace-nowrap">{m.name}</td>
-                          {showBoardContacts && (
-                            <td className="pr-2 whitespace-nowrap">
-                              {m.email && (
-                                <a
-                                  href={`mailto:${m.email}`}
-                                  className="text-emerald-700 hover:text-emerald-800 underline"
-                                >
-                                  {m.email}
-                                </a>
-                              )}
-                            </td>
-                          )}
-                          {showBoardContacts && (
-                            <td className="whitespace-nowrap">
-                              {m.phone && (
-                                <a
-                                  href={`tel:${m.phone}`}
-                                  className="text-emerald-700 hover:text-emerald-800 underline"
-                                >
-                                  {m.phone}
-                                </a>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!showBoardContacts && (
-                  <p className="mt-2 text-xs text-gray-600">
-                    Kontaktoplysninger offentliggøres, når klubben er helt klar
-                    med de endelige spor.
-                  </p>
+              </summary>
+              <div className="space-y-2 text-sm text-gray-800">
+                {safeText(cardValues?.body) ? (
+                  <p className="whitespace-pre-line">{safeText(cardValues?.body)}</p>
+                ) : (
+                  <ul className="list-disc ml-5">
+                    {VALUES_FALLBACK.map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
-            </div>
-          </details>
-        </section>
+            </details>
+          </section>
+        )}
 
-        {/* DOKUMENTER (OFFENTLIGE) */}
-        <section id="dokumenter" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>DOKUMENTER (OFFENTLIGE)</span>
+        {/* BESTYRELSE */}
+        {isYes(cardBoard?.visible) && (
+          <section id="bestyrelse" className="card h-full min-h-[84px]">
+            <details className="group" open>
+              <summary className="cursor-pointer list-none">
+                <div className="kicker mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-lime-500" />
+                    <span>{safeText(cardBoard?.title) || "Bestyrelse"}</span>
+                  </div>
+                  <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                    ▾
+                  </span>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
-                  ▾
-                </span>
-              </div>
-            </summary>
-            <ul className="text-sm text-gray-800 space-y-2">
-              <li>
-                <Link
-                  href="/docs/vedtaegter.pdf"
-                  target="_blank"
-                  className="text-emerald-700 hover:text-emerald-800 underline"
-                >
-                  Vedtægter (PDF)
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/privatliv"
-                  target="_blank"
-                  className="text-emerald-700 hover:text-emerald-800 underline"
-                >
-                  Privatlivspolitik
-                </Link>
-              </li>
-            </ul>
-          </details>
-        </section>
+              </summary>
 
-        {/* FIND OS */}
-        <section id="find-os" className="card h-full min-h-[84px]">
-          <details className="group">
-            <summary className="cursor-pointer list-none">
-              <div className="kicker mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime-500" />
-                  <span>FIND OS</span>
+              <div className="space-y-3 text-sm text-gray-800">
+                {safeText(cardBoard?.body) && (
+                  <p className="whitespace-pre-line">{safeText(cardBoard?.body)}</p>
+                )}
+
+                <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="overflow-x-auto text-sm text-gray-800">
+                    <table className="min-w-full border-separate border-spacing-y-1">
+                      <tbody>
+                        {BOARD.map((m, i) => (
+                          <tr key={`${m.role}-${m.name}-${i}`} className="align-top">
+                            <td className="pr-2 font-semibold whitespace-nowrap">
+                              {m.role}
+                            </td>
+                            <td className="whitespace-nowrap">{m.name}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <span className="inline-block transition-transform duration-200 group-open:rotate-180">
-                  ▾
-                </span>
               </div>
-            </summary>
-            <div className="space-y-2 text-sm text-gray-800">
-              <p>Spillested: Offentliggøres snarest, når lokaler er på plads.</p>
-              <p>Område: Humlum / Struer og omegn.</p>
-              <p>Parkering: Information følger, når spillested er fastlagt.</p>
-              <p>
-                Vi opdaterer løbende praktisk info, når klubben er helt på
-                plads med lokaler og faciliteter.
-              </p>
-            </div>
-          </details>
-        </section>
+            </details>
+          </section>
+        )}
+
+        {/* DOKUMENTER */}
+        {isYes(cardDocuments?.visible) && (
+          <section id="dokumenter" className="card h-full min-h-[84px]">
+            <details className="group" open>
+              <summary className="cursor-pointer list-none">
+                <div className="kicker mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-lime-500" />
+                    <span>
+                      {safeText(cardDocuments?.title) || "Dokumenter (offentlige)"}
+                    </span>
+                  </div>
+                  <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                    ▾
+                  </span>
+                </div>
+              </summary>
+              <div className="space-y-2 text-sm text-gray-800">
+                {safeText(cardDocuments?.body) && (
+                  <p className="whitespace-pre-line">
+                    {safeText(cardDocuments?.body)}
+                  </p>
+                )}
+
+                <ul className="space-y-2">
+                  <li>
+                    <Link
+                      href="/vedtaegter"
+                      className="text-emerald-700 hover:text-emerald-800 underline"
+                    >
+                      Vedtægter (PDF)
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/privatliv"
+                      className="text-emerald-700 hover:text-emerald-800 underline"
+                    >
+                      Privatlivspolitik
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </details>
+          </section>
+        )}
       </section>
+      {/* [HELP:OM:CARDS:TOPROW] END */}
+
+      {/* FIND OS (kort) — styres af card_findus.visible */}
+      {/* [HELP:OM:CARDS:FINDOS] START */}
+      {isYes(cardFindus?.visible) && (
+        <section className="mb-8">
+          <div id="findos" className="card max-w-md">
+            <details className="group" open>
+              <summary className="cursor-pointer list-none">
+                <div className="kicker mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-lime-500" />
+                    <span>{safeText(cardFindus?.title) || "Find os"}</span>
+                  </div>
+                  <span className="inline-block transition-transform duration-200 group-open:rotate-180">
+                    ▾
+                  </span>
+                </div>
+              </summary>
+
+              <div className="space-y-2 text-sm text-gray-800">
+                {safeText(cardFindus?.body) && (
+                  <p className="whitespace-pre-line">{safeText(cardFindus?.body)}</p>
+                )}
+
+                {venueName && (
+                  <p>
+                    <span className="font-semibold">Spillested:</span> {venueName}
+                  </p>
+                )}
+
+                {venueLine ? (
+                  <p>
+                    <span className="font-semibold">Adresse:</span> {venueLine}
+                  </p>
+                ) : addressLine ? (
+                  <p>
+                    <span className="font-semibold">Adresse:</span> {addressLine}
+                  </p>
+                ) : (
+                  <>
+                    <p>Spillested: Offentliggøres snarest, når lokaler er på plads.</p>
+                    <p>Område: Humlum / Struer og omegn.</p>
+                    <p>Parkering: Information følger, når spillested er fastlagt.</p>
+                  </>
+                )}
+
+                {clubCvr && (
+                  <p>
+                    <span className="font-semibold">CVR:</span> {clubCvr}
+                  </p>
+                )}
+
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+                  >
+                    Åbn kort i nyt vindue
+                  </a>
+                )}
+              </div>
+            </details>
+          </div>
+        </section>
+      )}
+      {/* [HELP:OM:CARDS:FINDOS] END */}
 
       {/* TRÆNING & PRØVETRÆNING */}
+      {/* [HELP:OM:TRAINING] START */}
       <section
         id="traening"
         className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm"
@@ -486,7 +742,7 @@ export default function OmPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-lime-200 bg-lime-50 p-4">
             <h2 className="text-xl font-extrabold mb-1">
-              Træning i Humlum Dartklub
+              Træning i {clubName}
             </h2>
             <p className="text-sm text-gray-700 mb-3">
               Vi starter med et solidt begynder- og fællesskabsfokus – og
@@ -517,7 +773,6 @@ export default function OmPage() {
               tilbage med en konkret dag.
             </p>
 
-            {/* Kompakt, redigerbar oversigt */}
             <div className="mt-3 rounded-xl border border-lime-200 bg-lime-50 p-3">
               <div className="text-xs font-semibold text-gray-700 mb-2">
                 Træningsdage (oversigt)
@@ -540,7 +795,7 @@ export default function OmPage() {
 
             <button
               type="button"
-              onClick={() => openBooking()}
+              onClick={openBooking}
               className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
             >
               Book prøvetræning
@@ -548,32 +803,120 @@ export default function OmPage() {
           </div>
         </div>
       </section>
+      {/* [HELP:OM:TRAINING] END */}
 
       {/* KONTAKT & MEDLEMSKAB */}
+      {/* [HELP:OM:BOTTOM] START */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <section className="rounded-2xl border border-lime-200 bg-white p-4 shadow-sm">
+        <section id="kontakt" className="rounded-2xl border border-lime-200 bg-white p-4 shadow-sm">
           <div className="kicker mb-2 flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-lime-500" />
             <span>Kontakt</span>
           </div>
-          <h3 className="font-semibold mb-1">Kontakt til klubben</h3>
-          <p className="text-sm text-gray-700">
-            Har du spørgsmål om klubben, prøvetræning eller sponsorater, så
-            skriv endelig til os. Vi svarer så hurtigt som muligt.
+
+          <h3 className="font-semibold mb-1">
+            {safeText(contactIntro?.title) || "Kontakt til klubben"}
+          </h3>
+
+          <p className="text-sm text-gray-700 whitespace-pre-line">
+            {safeText(contactIntro?.body) ||
+              "Har du spørgsmål om klubben, prøvetræning eller samarbejde, så skriv endelig til os. Vi svarer så hurtigt som muligt."}
           </p>
+
+          <div className="mt-3 rounded-xl border bg-gray-50 p-3 text-sm text-gray-800 space-y-1">
+            {addressLine && (
+              <div>
+                <span className="font-semibold">Adresse:</span> {addressLine}
+              </div>
+            )}
+            {clubCvr && (
+              <div>
+                <span className="font-semibold">CVR:</span> {clubCvr}
+              </div>
+            )}
+            {clubEmail && (
+              <div>
+                <span className="font-semibold">E-mail:</span>{" "}
+                <a
+                  href={`mailto:${clubEmail}`}
+                  className="text-emerald-700 hover:text-emerald-800 underline"
+                >
+                  {clubEmail}
+                </a>
+              </div>
+            )}
+            {clubPhone && (
+              <div>
+                <span className="font-semibold">Telefon:</span>{" "}
+                <a
+                  href={`tel:${clubPhone}`}
+                  className="text-emerald-700 hover:text-emerald-800 underline"
+                >
+                  {clubPhone}
+                </a>
+              </div>
+            )}
+            {facebook && (
+              <div>
+                <span className="font-semibold">Facebook:</span>{" "}
+                <a
+                  href={facebook}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-700 hover:text-emerald-800 underline"
+                >
+                  Åbn side
+                </a>
+              </div>
+            )}
+            {website && (
+              <div>
+                <span className="font-semibold">Website:</span>{" "}
+                <a
+                  href={website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-700 hover:text-emerald-800 underline"
+                >
+                  Åbn
+                </a>
+              </div>
+            )}
+
+            {!addressLine && !clubCvr && !clubEmail && !clubPhone && !facebook && (
+              <div>
+                Kontaktinfo hentes fra admin-arket. Udfyld “Klubinfo” for at få
+                adresse, CVR og e-mail vist her.
+              </div>
+            )}
+          </div>
+
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              href="/om#find-os"
+            {mapsUrl ? (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+              >
+                Find os
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => go("#findos")}
+                className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
+              >
+                Find os
+              </button>
+            )}
+
+            <a
+              href={`mailto:${clubEmail}`}
               className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
             >
-              Find os
-            </Link>
-            <Link
-              href="/sponsor"
-              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-gray-50"
-            >
-              Sponsorpakker
-            </Link>
+              Send mail
+            </a>
           </div>
         </section>
 
@@ -585,6 +928,7 @@ export default function OmPage() {
             <span className="h-2 w-2 rounded-full bg-lime-500" />
             <span>Medlemskab</span>
           </div>
+
           <h3 className="font-semibold mb-1">Medlemskab</h3>
           <p className="text-sm text-gray-700 mb-3">
             Du kan læse mere om medlemskab og pakker på siden{" "}
@@ -596,15 +940,16 @@ export default function OmPage() {
             </Link>
             .
           </p>
-          <p>
+          <p className="text-sm text-gray-700">
             Tilmeldinger håndteres digitalt via vores hjemmeside. Kontingent og
             indbetaling håndteres i klubben, og du får bekræftelse på mail.
           </p>
         </section>
       </section>
+      {/* [HELP:OM:BOTTOM] END */}
 
       {/* BOOKING MODAL */}
-      {/* [HELP:ABOUT:MODAL] START */}
+      {/* [HELP:OM:MODAL] START */}
       {showBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl">
@@ -713,9 +1058,7 @@ export default function OmPage() {
           </div>
         </div>
       )}
-      {/* [HELP:ABOUT:MODAL] END */}
+      {/* [HELP:OM:MODAL] END */}
     </main>
   );
-  /* [HELP:ABOUT:LAYOUT] END */
 }
-/* [HELP:ABOUT:COMP] END */

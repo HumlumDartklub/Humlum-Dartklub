@@ -39,18 +39,44 @@ type Plan = {
 type SheetRow = Record<string, any>;
 
 /** [HELP:FORM:FAMILY:TYPE] START */
-type FamMember = { first: string; last: string; year: string };
+type FamMember = { first: string; last: string; birth_date: string };
 /** [HELP:FORM:FAMILY:TYPE] END */
 
 function parseVisible(raw: any) {
-  // Hvis kolonnen ikke findes eller er tom → default TRUE
   if (raw === undefined || raw === null) return true;
   const s = String(raw).trim();
   if (!s) return true;
-
   const v = s.toLowerCase();
   return v === "true" || v === "1" || v === "yes" || v === "ja";
 }
+
+/** [HELP:BIRTH:UTILS] START */
+function formatBirthDisplay(input: string): string {
+  const digits = input.replace(/\D/g, "").slice(0, 8);
+  if (!digits) return "";
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  }
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+function deriveYearFromDisplay(display: string): string {
+  const digits = display.replace(/\D/g, "");
+  if (digits.length < 4) return "";
+  return digits.slice(-4);
+}
+
+function displayToIso(display: string): string {
+  const digits = display.replace(/\D/g, "");
+  if (digits.length !== 8) return "";
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4);
+  return `${yyyy}-${mm}-${dd}`;
+}
+/** [HELP:BIRTH:UTILS] END */
 
 export default function BlivMedlemPage() {
   /** [HELP:STATE:PLAN] START */
@@ -98,7 +124,6 @@ export default function BlivMedlemPage() {
             const badge = String(r.badge ?? "").trim() || undefined;
             const order = Number(r.order ?? 999);
 
-            // Støt både "visible" og muligt dansk navn "synlig"
             const visibleRaw = r.visible ?? r.synlig ?? r.is_visible;
             const visible = parseVisible(visibleRaw);
 
@@ -117,8 +142,6 @@ export default function BlivMedlemPage() {
           .filter((p) => p.key && p.title);
 
         mapped.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-
-        // NU: default er at vise pakker, medmindre de er eksplicit falsy i ark
         const visiblePlans = mapped.filter((p) => p.visible !== false);
 
         if (alive) {
@@ -170,7 +193,7 @@ export default function BlivMedlemPage() {
   const [zip, setZip] = useState("");
   const [by, setBy] = useState("");
 
-  // KUN fødselsdato i UI
+  // Fødselsdato vises som dd-mm-åååå (mobil-venligt)
   const [birthDate, setBirthDate] = useState("");
   // [HELP:FORM:STATE] END
 
@@ -222,7 +245,7 @@ export default function BlivMedlemPage() {
     setFam((prev) => {
       const next = [...prev];
       while (next.length < count - 1)
-        next.push({ first: "", last: "", year: "" });
+        next.push({ first: "", last: "", birth_date: "" });
       while (next.length > count - 1) next.pop();
       return next;
     });
@@ -264,8 +287,8 @@ export default function BlivMedlemPage() {
       return;
     }
 
-    // Vi udleder fødselsår internt fra fødselsdato
-    const derivedBirthYear = birthDate ? birthDate.slice(0, 4) : "";
+    const birthYear = deriveYearFromDisplay(birthDate);
+    const birthIso = displayToIso(birthDate);
 
     const payload = {
       package_id: selectedPlan.title,
@@ -282,13 +305,19 @@ export default function BlivMedlemPage() {
       zip,
       city: by,
 
-      // KUN én bruger-input i UI – men vi sender år med for schema-kompatibilitet
-      birth_date: birthDate,
-      birth_year: derivedBirthYear,
+      birth_date: birthIso || birthDate,
+      birth_year: birthYear,
 
       remark: note,
       household: selectedPlan.key === "familie" ? husstand : "",
-      family_members: fam,
+      family_members: fam.map((m) => {
+        const year = m.birth_date ? m.birth_date.slice(0, 4) : "";
+        return {
+          ...m,
+          birth_year: year,
+          year,
+        };
+      }),
       source: "website",
       source_form_version: "v3",
     };
@@ -498,10 +527,12 @@ export default function BlivMedlemPage() {
             <div>
               <label className="text-sm font-medium">Fødselsdato</label>
               <input
-                type="date"
+                type="text"
+                inputMode="numeric"
+                placeholder="dd-mm-åååå"
                 className="mt-1 w-full rounded-xl border px-3 py-2"
                 value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
+                onChange={(e) => setBirthDate(formatBirthDisplay(e.target.value))}
               />
             </div>
           </div>
@@ -598,14 +629,15 @@ export default function BlivMedlemPage() {
                       }}
                     />
                     <input
+                      type="date"
                       className="rounded-xl border px-3 py-2"
-                      placeholder="Fødselsår (YYYY)"
-                      value={m.year}
+                      placeholder="Fødselsdato"
+                      value={m.birth_date}
                       onChange={(e) => {
                         const v = e.target.value;
                         setFam((prev) => {
                           const next = [...prev];
-                          next[idx] = { ...next[idx], year: v };
+                          next[idx] = { ...next[idx], birth_date: v };
                           return next;
                         });
                       }}
@@ -652,6 +684,14 @@ export default function BlivMedlemPage() {
                 target="_blank"
               >
                 privatlivspolitik
+              </Link>{" "}
+              og{" "}
+              <Link
+                href="/docs/vedtaegter.pdf"
+                className="underline text-emerald-700"
+                target="_blank"
+              >
+                vedtægter
               </Link>
               .
             </label>
@@ -660,7 +700,8 @@ export default function BlivMedlemPage() {
           {/* CTA */}
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="text-xs text-slate-500">
-              Betaling/indbetaling håndteres i klubben efter bekræftet indmelding.
+              Betaling/indbetaling håndteres i klubben efter bekræftet
+              indmelding.
             </div>
             <div className="flex justify-end sm:ml-auto">
               <button
@@ -676,7 +717,7 @@ export default function BlivMedlemPage() {
           </div>
 
           {msg && (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {msg}
             </div>
           )}

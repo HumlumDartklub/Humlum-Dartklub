@@ -204,8 +204,22 @@ function mapSheetRowToPackage(row: SheetRow): Package | null {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const icon = row["icon"] || "🎯";
-  const featured = isTruthyYes(row["featured"] || row["highlight"]);
+  let icon = normalizeString(row["icon"]);
+
+  // Smart ikon-fallback: hvis arket ikke har ikon udfyldt,
+  // så giver vi Bronze/Sølv/Guld deres pokaler alligevel.
+  if (!icon) {
+    const k = key.toLowerCase();
+    if (k.includes("bronze")) icon = "🥉";
+    else if (k.includes("sølv") || k.includes("solv") || k.includes("silver"))
+      icon = "🥈";
+    else if (k.includes("guld") || k.includes("gold")) icon = "🥇";
+    else icon = "🎯"; // absolut fallback
+  }
+
+  const featured =
+    isTruthyYes(row["featured"] || row["highlight"]) ||
+    normalizeString(badge).toLowerCase() === "populær";
 
   return {
     key,
@@ -220,6 +234,7 @@ function mapSheetRowToPackage(row: SheetRow): Package | null {
   };
 }
 /* [HELP:SPONSOR:SHEET:MAP] END */
+
 
 /* ======================================
    Komponent
