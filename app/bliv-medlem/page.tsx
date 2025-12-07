@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 /** [HELP:CONFIG] START */
 const TAB = "MEDLEMSPAKKER";
-const LIMIT = 50;
+const LIMIT = 200;
 
 const KOEN = ["Mand", "Kvinde", "Andet"] as const;
 const NIVEAUER = ["Hygge", "Turnering"] as const;
@@ -36,13 +36,21 @@ type Plan = {
 };
 /** [HELP:TYPES:PLAN] END */
 
-/** [HELP:TYPES:SHEETROW] START */
 type SheetRow = Record<string, any>;
-/** [HELP:TYPES:SHEETROW] END */
 
 /** [HELP:FORM:FAMILY:TYPE] START */
 type FamMember = { first: string; last: string; year: string };
 /** [HELP:FORM:FAMILY:TYPE] END */
+
+function parseVisible(raw: any) {
+  // Hvis kolonnen ikke findes eller er tom → default TRUE
+  if (raw === undefined || raw === null) return true;
+  const s = String(raw).trim();
+  if (!s) return true;
+
+  const v = s.toLowerCase();
+  return v === "true" || v === "1" || v === "yes" || v === "ja";
+}
 
 export default function BlivMedlemPage() {
   /** [HELP:STATE:PLAN] START */
@@ -63,36 +71,61 @@ export default function BlivMedlemPage() {
         const data = await res.json().catch(() => null);
 
         const items: SheetRow[] = data?.items || [];
+
         const mapped: Plan[] = items
-          .map((r) => ({
-            key: String(r.key ?? r.package_key ?? "").trim(),
-            title: String(r.title ?? r.package_title ?? "").trim(),
-            subtitle: String(r.subtitle ?? "").trim() || undefined,
-            price_amount: Number(r.price_amount ?? r.price ?? 0),
-            price_unit: String(r.price_unit ?? "DKK/år").trim(),
-            features: Array.isArray(r.features)
-              ? r.features
-              : String(r.features ?? "")
-                  .split("\n")
-                  .map((x) => x.trim())
-                  .filter(Boolean),
-            badge: String(r.badge ?? "").trim() || undefined,
-            order: Number(r.order ?? 999),
-            visible:
-              r.visible === true ||
-              String(r.visible ?? "")
-                .toLowerCase()
-                .trim() === "true",
-          }))
+          .map((r) => {
+            const key = String(
+              r.package_key ?? r.key ?? r.id ?? ""
+            ).trim();
+
+            const title = String(
+              r.package_title ?? r.title ?? r.name ?? ""
+            ).trim();
+
+            const subtitle = String(r.subtitle ?? "").trim() || undefined;
+
+            const price_amount = Number(r.price_amount ?? r.price ?? 0);
+            const price_unit = String(r.price_unit ?? "DKK/år").trim();
+
+            const features =
+              Array.isArray(r.features)
+                ? r.features
+                : String(r.features ?? "")
+                    .split("\n")
+                    .map((x) => x.trim())
+                    .filter(Boolean);
+
+            const badge = String(r.badge ?? "").trim() || undefined;
+            const order = Number(r.order ?? 999);
+
+            // Støt både "visible" og muligt dansk navn "synlig"
+            const visibleRaw = r.visible ?? r.synlig ?? r.is_visible;
+            const visible = parseVisible(visibleRaw);
+
+            return {
+              key,
+              title,
+              subtitle,
+              price_amount,
+              price_unit,
+              features,
+              badge,
+              order,
+              visible,
+            };
+          })
           .filter((p) => p.key && p.title);
 
         mapped.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
-        const visible = mapped.filter((p) => p.visible !== false);
+        // NU: default er at vise pakker, medmindre de er eksplicit falsy i ark
+        const visiblePlans = mapped.filter((p) => p.visible !== false);
 
         if (alive) {
-          setPlans(visible);
-          if (!selectedKey && visible[0]?.key) setSelectedKey(visible[0].key);
+          setPlans(visiblePlans);
+          if (!selectedKey && visiblePlans[0]?.key) {
+            setSelectedKey(visiblePlans[0].key);
+          }
         }
       } catch {
         if (alive) setPlans([]);
@@ -136,7 +169,8 @@ export default function BlivMedlemPage() {
   const [adresse, setAdresse] = useState("");
   const [zip, setZip] = useState("");
   const [by, setBy] = useState("");
-  const [birth, setBirth] = useState("");
+
+  // KUN fødselsdato i UI
   const [birthDate, setBirthDate] = useState("");
   // [HELP:FORM:STATE] END
 
@@ -173,10 +207,6 @@ export default function BlivMedlemPage() {
   }, [citySuggestion]);
   /** [HELP:FORM:ZIPCITY:FN] END */
 
-  /** [HELP:FORM:GENDER] START */
-  const genderOptions = KOEN;
-  /** [HELP:FORM:GENDER] END */
-
   /** [HELP:FORM:LEVELS] START */
   const levelOptions = NIVEAUER;
   /** [HELP:FORM:LEVELS] END */
@@ -191,7 +221,8 @@ export default function BlivMedlemPage() {
     const count = Math.max(2, Number(husstand) || 2);
     setFam((prev) => {
       const next = [...prev];
-      while (next.length < count - 1) next.push({ first: "", last: "", year: "" });
+      while (next.length < count - 1)
+        next.push({ first: "", last: "", year: "" });
       while (next.length > count - 1) next.pop();
       return next;
     });
@@ -206,6 +237,7 @@ export default function BlivMedlemPage() {
     adresse &&
     zip &&
     by &&
+    birthDate &&
     terms
   );
   /** [HELP:FORM:VALIDATION] END */
@@ -213,7 +245,16 @@ export default function BlivMedlemPage() {
   /** [HELP:FORM:SUBMIT] START */
   async function goToPayment() {
     setMsg(null);
-    if (!fornavn || !efternavn || !email || !adresse || !zip || !by) {
+
+    if (
+      !fornavn ||
+      !efternavn ||
+      !email ||
+      !adresse ||
+      !zip ||
+      !by ||
+      !birthDate
+    ) {
       setMsg("Udfyld venligst alle felter (bemærkning er valgfri).");
       return;
     }
@@ -222,6 +263,9 @@ export default function BlivMedlemPage() {
       setMsg("Vælg venligst en medlemsform.");
       return;
     }
+
+    // Vi udleder fødselsår internt fra fødselsdato
+    const derivedBirthYear = birthDate ? birthDate.slice(0, 4) : "";
 
     const payload = {
       package_id: selectedPlan.title,
@@ -237,11 +281,16 @@ export default function BlivMedlemPage() {
       address: adresse,
       zip,
       city: by,
-      birth_year: birth,
+
+      // KUN én bruger-input i UI – men vi sender år med for schema-kompatibilitet
       birth_date: birthDate,
-      note,
+      birth_year: derivedBirthYear,
+
+      remark: note,
       household: selectedPlan.key === "familie" ? husstand : "",
       family_members: fam,
+      source: "website",
+      source_form_version: "v3",
     };
 
     try {
@@ -274,62 +323,70 @@ export default function BlivMedlemPage() {
       {/* PLAN-CARDS */}
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {plans ? (
-          plans.map((p) => (
-            <article
-              key={p.key}
-              className={`relative flex h-full flex-col rounded-2xl border p-4 shadow-sm ${
-                p.key === selectedKey
-                  ? "border-emerald-400"
-                  : "border-lime-300 transition hover:border-emerald-400"
-              }`}
-            >
-              {p.badge && (
-                <div className="absolute -right-3 -top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
-                  {p.badge}
-                </div>
-              )}
-
-              <div className="flex-1">
-                <h2 className="text-lg font-bold">{p.title}</h2>
-                {p.subtitle && (
-                  <div className="mt-1 text-sm text-slate-600">{p.subtitle}</div>
+          plans.length > 0 ? (
+            plans.map((p) => (
+              <article
+                key={p.key}
+                className={`relative flex h-full flex-col rounded-2xl border p-4 shadow-sm ${
+                  p.key === selectedKey
+                    ? "border-emerald-400"
+                    : "border-lime-300 transition hover:border-emerald-400"
+                }`}
+              >
+                {p.badge && (
+                  <div className="absolute -right-3 -top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
+                    {p.badge}
+                  </div>
                 )}
+
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold">{p.title}</h2>
+                  {p.subtitle && (
+                    <div className="mt-1 text-sm text-slate-600">
+                      {p.subtitle}
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    <div className="text-3xl font-extrabold">
+                      {p.price_amount}{" "}
+                      <span className="text-sm font-semibold text-slate-500">
+                        {p.price_unit || "DKK/år"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {p.features && p.features.length > 0 && (
+                    <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                      {p.features.map((f, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 <div className="mt-4">
-                  <div className="text-3xl font-extrabold">
-                    {p.price_amount}{" "}
-                    <span className="text-sm font-semibold text-slate-500">
-                      {p.price_unit || "DKK/år"}
-                    </span>
-                  </div>
+                  <button
+                    onClick={() => onSelectPlan(p.key)}
+                    className={`w-full rounded-xl px-4 py-2 text-sm font-semibold ${
+                      p.key === selectedKey
+                        ? "bg-emerald-600 text-white"
+                        : "border border-lime-300 bg-white hover:border-emerald-400"
+                    }`}
+                  >
+                    {p.key === selectedKey ? "Valgt" : "Vælg denne pakke"}
+                  </button>
                 </div>
-
-                {p.features && p.features.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-sm text-slate-700">
-                    {p.features.map((f, idx) => (
-                      <li key={idx} className="flex gap-2">
-                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="mt-4">
-                <button
-                  onClick={() => onSelectPlan(p.key)}
-                  className={`w-full rounded-xl px-4 py-2 text-sm font-semibold ${
-                    p.key === selectedKey
-                      ? "bg-emerald-600 text-white"
-                      : "border border-lime-300 bg-white hover:border-emerald-400"
-                  }`}
-                >
-                  {p.key === selectedKey ? "Valgt" : "Vælg denne pakke"}
-                </button>
-              </div>
-            </article>
-          ))
+              </article>
+            ))
+          ) : (
+            <div className="col-span-full rounded-2xl border border-lime-300 bg-white p-4">
+              Ingen medlemsformer fundet i arket endnu.
+            </div>
+          )
         ) : (
           <div className="col-span-full rounded-2xl border border-lime-300 bg-white p-4">
             Henter medlemsformer…
@@ -387,7 +444,7 @@ export default function BlivMedlemPage() {
                   setKoen(e.target.value as (typeof KOEN)[number])
                 }
               >
-                {genderOptions.map((g) => (
+                {KOEN.map((g) => (
                   <option key={g} value={g}>
                     {g}
                   </option>
@@ -420,8 +477,8 @@ export default function BlivMedlemPage() {
             </div>
           </div>
 
-          {/* Navn + fødselsinfo */}
-          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          {/* Navn + fødselsdato */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div>
               <label className="text-sm font-medium">Fornavn</label>
               <input
@@ -445,15 +502,6 @@ export default function BlivMedlemPage() {
                 className="mt-1 w-full rounded-xl border px-3 py-2"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Fødselsår</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                placeholder="YYYY"
-                value={birth}
-                onChange={(e) => setBirth(e.target.value)}
               />
             </div>
           </div>
@@ -628,13 +676,7 @@ export default function BlivMedlemPage() {
           </div>
 
           {msg && (
-            <div
-              className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
-                msg.includes("Du skal")
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
-              }`}
-            >
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {msg}
             </div>
           )}

@@ -12,8 +12,8 @@ type Member = { role: string; name: string; email?: string; phone?: string };
 /* [HELP:ABOUT:VALUES] START — klubværdier (liste) */
 const VALUES = [
   { title: "Fællesskab", text: "Alle skal kunne være med og føle sig velkomne." },
-  { title: "Præcision",  text: "Vi træner klogt, måler fremskridt og deler læring." },
-  { title: "Respekt",    text: "Fairplay, ordentlig tone og plads til forskellighed." },
+  { title: "Præcision", text: "Vi træner klogt, måler fremskridt og deler læring." },
+  { title: "Respekt", text: "Fairplay, ordentlig tone og plads til forskellighed." },
   { title: "Frivillighed", text: "Vi bygger klubben sammen – med tid, idéer og energi." },
 ];
 /* [HELP:ABOUT:VALUES] END */
@@ -23,7 +23,6 @@ const TRAIN_RULES = [
   { weekday: 2, timeHHMM: "19:00", label: "Tirsdag 19:00" },
   { weekday: 4, timeHHMM: "19:00", label: "Torsdag 19:00" },
 ];
-const INTERVAL_WEEKS = 1;
 /* [HELP:ABOUT:TRAIN:CONFIG] END */
 
 /* [HELP:ABOUT:BOARD] START — bestyrelse (kan senere flyttes til Sheet) */
@@ -37,58 +36,43 @@ const BOARD: Member[] = [
 ];
 /* [HELP:ABOUT:BOARD] END */
 
-/* [HELP:ABOUT:UTIL:nextSlots] START */
-function nextSlots(
-  rules: { weekday: number; timeHHMM: string; label: string }[],
-  count = 12,
-  intervalWeeks = 1
-) {
-  const out: { date: Date; isoDate: string; time: string; label: string }[] = [];
+/* [HELP:ABOUT:TRYOUT:TYPES] START */
+type TryoutRow = {
+  key?: string;
+  date?: string;
+  weekday?: string;
+  time_start?: string;
+  time_end?: string;
+  title?: string;
+  description?: string;
+  location?: string;
+  level?: string;
+  capacity?: any;
+  signup_required?: any;
+  contact_email?: string;
+  status?: string;
+  visible?: any;
+  order?: any;
+};
+/* [HELP:ABOUT:TRYOUT:TYPES] END */
 
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let weeksChecked = 0;
-
-  while (out.length < count && weeksChecked < 52) {
-    for (const r of rules) {
-      const d = new Date(start);
-      const dayDiff = (r.weekday - d.getDay() + 7) % 7;
-      d.setDate(d.getDate() + dayDiff + weeksChecked * 7 * intervalWeeks);
-
-      const [hh, mm] = r.timeHHMM.split(":").map((n) => parseInt(n, 10));
-      d.setHours(hh, mm, 0, 0);
-
-      if (d.getTime() <= now.getTime()) continue;
-
-      const isoDate = d.toISOString().slice(0, 10);
-      const time = r.timeHHMM;
-
-      const weekdayNames = [
-        "Søndag",
-        "Mandag",
-        "Tirsdag",
-        "Onsdag",
-        "Torsdag",
-        "Fredag",
-        "Lørdag",
-      ];
-      const label = `${weekdayNames[d.getDay()]} d. ${d
-        .getDate()
-        .toString()
-        .padStart(2, "0")}-${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")} kl. ${time}`;
-
-      out.push({ date: d, isoDate, time, label });
-      if (out.length >= count) break;
-    }
-    weeksChecked++;
-  }
-
-  out.sort((a, b) => a.date.getTime() - b.date.getTime());
-  return out;
+/* [HELP:ABOUT:TRYOUT:UTIL] START */
+function isYes(v: any) {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "yes" || s === "ja" || s === "true" || s === "1";
 }
-/* [HELP:ABOUT:UTIL:nextSlots] END */
+
+function compactTryoutLabel(r: TryoutRow) {
+  const wd = String(r.weekday ?? "").trim();
+  const ts = String(r.time_start ?? "").trim();
+  const te = String(r.time_end ?? "").trim();
+
+  if (wd && ts && te) return `${wd} ${ts}-${te}`;
+  if (wd && ts) return `${wd} kl. ${ts}`;
+  if (wd) return wd;
+  return "";
+}
+/* [HELP:ABOUT:TRYOUT:UTIL] END */
 
 /* [HELP:ABOUT:API] START */
 async function createTryoutBooking(payload: {
@@ -121,8 +105,6 @@ async function createTryoutBooking(payload: {
 /* [HELP:ABOUT:COMP] START */
 export default function OmPage() {
   /* [HELP:ABOUT:STATE] START */
-  const [slots] = useState(() => nextSlots(TRAIN_RULES, 24, INTERVAL_WEEKS));
-  const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [showBooking, setShowBooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -135,12 +117,67 @@ export default function OmPage() {
 
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+
+  const [tryoutRows, setTryoutRows] = useState<TryoutRow[]>([]);
   /* [HELP:ABOUT:STATE] END */
 
   const showBoardContacts = useMemo(
     () => BOARD.some((m) => m.email || m.phone),
     []
   );
+
+  /* [HELP:ABOUT:EFFECT:TRYOUT_SHEET] START */
+  useEffect(() => {
+    let alive = true;
+
+    async function loadTryouts() {
+      try {
+        const res = await fetch("/api/sheet?tab=PROEVETRAENING&limit=200", {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => null);
+        const items: TryoutRow[] = data?.items || [];
+
+        const filtered = items
+          .filter((r) => isYes(r.visible))
+          .filter((r) => {
+            const s = String(r.status ?? "").trim().toLowerCase();
+            return !s || s === "open" || s === "åben";
+          })
+          .map((r) => ({
+            ...r,
+            order: Number(r.order ?? 999),
+          }))
+          .sort((a, b) => Number(a.order) - Number(b.order));
+
+        if (!alive) return;
+        setTryoutRows(filtered);
+      } catch {
+        if (!alive) return;
+        setTryoutRows([]);
+      }
+    }
+
+    loadTryouts();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  /* [HELP:ABOUT:EFFECT:TRYOUT_SHEET] END */
+
+  /* [HELP:ABOUT:DERIVED:TRYOUT_DAYS] START */
+  const tryoutDayLabels = useMemo(() => {
+    // Primært fra Sheet
+    const labels = tryoutRows
+      .map(compactTryoutLabel)
+      .filter(Boolean);
+
+    if (labels.length > 0) return labels;
+
+    // Fallback til hardcoded
+    return TRAIN_RULES.map((r) => r.label);
+  }, [tryoutRows]);
+  /* [HELP:ABOUT:DERIVED:TRYOUT_DAYS] END */
 
   /* [HELP:ABOUT:HANDLERS:NAV] START */
   const go = useCallback((id: string) => {
@@ -151,25 +188,8 @@ export default function OmPage() {
   }, []);
   /* [HELP:ABOUT:HANDLERS:NAV] END */
 
-  /* [HELP:ABOUT:EFFECT:PRESELECT] START */
-  useEffect(() => {
-    if (!selectedSlot) return;
-    const [date, time] = selectedSlot.split("T");
-    if (date && time) {
-      setSelectedDate(date);
-      setSelectedTime(time);
-    }
-  }, [selectedSlot]);
-  /* [HELP:ABOUT:EFFECT:PRESELECT] END */
-
   /* [HELP:ABOUT:HANDLERS:OPEN] START */
-  const openBooking = useCallback((slotId?: string) => {
-    if (slotId) {
-      setSelectedSlot(slotId);
-      const [date, time] = slotId.split("T");
-      setSelectedDate(date);
-      setSelectedTime(time);
-    }
+  const openBooking = useCallback(() => {
     setShowBooking(true);
     setMsg(null);
     setSuccess(false);
@@ -236,9 +256,14 @@ export default function OmPage() {
               Humlum Dartklub
             </h1>
             <p className="mt-2 text-sm text-gray-700 max-w-2xl">
-              Vi er en ny lokal forening med fokus på fællesskab, udvikling og
-              god dartkultur. Her er plads til både nybegyndere, familier og
-              dig, der drømmer om turneringsniveau.
+              Humlum Dartklub er en ny, lokal forening med fokus på fællesskab,
+              udvikling og god dartkultur. Vi vil skabe et trygt og moderne
+              klubmiljø, hvor både nybegyndere, familier og erfarne
+              turneringsspillere føler sig hjemme. <br />
+              Hos os handler det ikke kun om at ramme skiven – men om at blive
+              en del af et fællesskab, der løfter hinanden. Vi bygger klubben op
+              i et tempo, hvor kvalitet, frivillighed og gode oplevelser går hånd
+              i hånd, så træning og events kan vokse sammen med medlemmerne.
             </p>
           </div>
 
@@ -328,8 +353,9 @@ export default function OmPage() {
                 foreningsmiljø med plads til både hygge og ambition.
               </p>
               <p>
-                Vi bygger klubben trin for trin, så rammer, træning og events
-                kan skaleres i takt med at vi bliver flere.
+                Vi prioriterer en god opstartsramme med klare værdier,
+                inkluderende træning og en sund klubkultur, hvor nye og erfarne
+                spillere udvikler sig side om side.
               </p>
 
               <div className="mt-3 rounded-xl border bg-gray-50 p-3">
@@ -337,8 +363,8 @@ export default function OmPage() {
                 <div className="overflow-x-auto text-sm text-gray-800">
                   <table className="min-w-full border-separate border-spacing-y-1">
                     <tbody>
-                      {BOARD.map((m) => (
-                        <tr key={m.role} className="align-top">
+                      {BOARD.map((m, i) => (
+                        <tr key={`${m.role}-${m.name}-${i}`} className="align-top">
                           <td className="pr-2 font-semibold whitespace-nowrap">
                             {m.role}
                           </td>
@@ -491,45 +517,36 @@ export default function OmPage() {
               tilbage med en konkret dag.
             </p>
 
+            {/* Kompakt, redigerbar oversigt */}
+            <div className="mt-3 rounded-xl border border-lime-200 bg-lime-50 p-3">
+              <div className="text-xs font-semibold text-gray-700 mb-2">
+                Træningsdage (oversigt)
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {tryoutDayLabels.map((label, i) => (
+                  <span
+                    key={`${label}-${i}`}
+                    className="rounded-lg border border-lime-200 bg-white px-2 py-1 text-[11px] font-semibold"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-gray-600">
+                Tidspunkter kan justeres i admin-arket. Vi matcher dig med en
+                konkret dato efter din henvendelse.
+              </p>
+            </div>
+
             <button
               type="button"
               onClick={() => openBooking()}
-              className="mt-1 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
             >
               Book prøvetræning
             </button>
           </div>
         </div>
-
-        {/* Liste over kommende slots */}
-        {slots.length > 0 && (
-          <div className="mt-4 rounded-xl border border-lime-200 bg-white p-3 text-sm text-gray-800">
-            <h3 className="font-semibold mb-2">Mulige tidspunkter (oversigt)</h3>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {slots.map((s) => {
-                const slotId = `${s.isoDate}T${s.time}`;
-                const isSelected = selectedSlot === slotId;
-                return (
-                  <button
-                    key={slotId}
-                    type="button"
-                    onClick={() => openBooking(slotId)}
-                    className={`rounded-lg border px-3 py-2 text-left text-xs ${
-                      isSelected
-                        ? "border-emerald-600 bg-emerald-50"
-                        : "border-lime-200 bg-lime-50 hover:border-emerald-400"
-                    }`}
-                  >
-                    <div className="font-semibold">{s.label}</div>
-                    <div className="text-[11px] text-gray-600">
-                      Klik for at forespørge denne tid til prøvetræning.
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </section>
 
       {/* KONTAKT & MEDLEMSKAB */}
