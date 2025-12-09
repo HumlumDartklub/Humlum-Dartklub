@@ -36,9 +36,11 @@ type UiEvent = {
 };
 
 /* [HELP:EVENTS:UTILS] START */
-const isYes = (v: any) => String(v ?? "")
-  .trim()
-  .toUpperCase() === "YES";
+const isYes = (v: any) => {
+  const s = String(v ?? "").trim().toUpperCase();
+  return s === "YES" || s === "TRUE" || s === "1" || s === "Y";
+};
+
 
 const toNum = (v: any, d = 9999) => {
   const n = Number(v);
@@ -92,14 +94,23 @@ async function loadEventRows(limit = 400): Promise<EventRow[]> {
   try {
     const base = getBaseUrl();
     const url = new URL(`/api/sheet?tab=EVENTS&limit=${limit}`, base).toString();
+
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json().catch(() => null);
-    const items = Array.isArray(data?.items) ? data.items : [];
-    return items as EventRow[];
+
+    const arr =
+      (Array.isArray(data?.items) && data.items) ||
+      (Array.isArray(data?.rows) && data.rows) ||
+      (Array.isArray(data?.itemsNormalized) && data.itemsNormalized) ||
+      [];
+
+    return arr as EventRow[];
   } catch {
     return [];
   }
 }
+
+
 /* [HELP:EVENTS:UTILS] END */
 
 export default async function EventsPage() {
