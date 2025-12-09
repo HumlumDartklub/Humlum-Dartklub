@@ -114,7 +114,8 @@ export default function SponsorWallPage() {
 
             return { id, name, tier, url, logoUrl, featured, order };
           })
-          .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+          .sort((a: Sponsor, b: Sponsor) => (a.order ?? 9999) - (b.order ?? 9999));
+
 
         if (!alive) return;
         setSponsors(mapped.length ? mapped : FALLBACK_SPONSORS);
