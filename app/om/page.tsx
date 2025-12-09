@@ -769,13 +769,13 @@ export default function OmPage() {
             <h3 className="font-semibold mb-1">Prøvetræning</h3>
             <p className="mb-2 text-sm text-gray-700">
               Du er velkommen til at prøve at være med, inden du beslutter dig
-              for medlemskab. Udfyld en kort interesseformular, så vender vi
+              for medlemskab. Vi tilbyder 2 gratis prøvedage. Udfyld en kort interesseformular, så vender vi
               tilbage med en konkret dag.
             </p>
 
             <div className="mt-3 rounded-xl border border-lime-200 bg-lime-50 p-3">
               <div className="text-xs font-semibold text-gray-700 mb-2">
-                Træningsdage (oversigt)
+                Træningsdage (forventet)
               </div>
               <div className="flex flex-wrap gap-2">
                 {tryoutDayLabels.map((label, i) => (
@@ -788,7 +788,7 @@ export default function OmPage() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-gray-600">
-                Tidspunkter kan justeres i admin-arket. Vi matcher dig med en
+                Tidspunkter offentlig gøres snart. Send en mail, vi matcher dig med en
                 konkret dato efter din henvendelse.
               </p>
             </div>

@@ -10,16 +10,21 @@ export async function fetchSheet(tab: string): Promise<AnyRow[]> {
   if (!name) return [];
 
   const base = process.env.NEXT_PUBLIC_SHEET_API;
+
+  // Hvis base findes, går vi direkte på GAS.
+  // Ellers bruger vi vores lokale proxy /api/sheet
   const url = base
     ? `${base}?tab=${encodeURIComponent(name)}`
-    : `/api/sheets?sheet=${encodeURIComponent(name)}`;
+    : `/api/sheet?tab=${encodeURIComponent(name)}`;
 
   try {
     const res = await fetch(url, { cache: "no-store" });
     const json = await res.json();
+
     if (Array.isArray(json?.rows)) return json.rows;
     if (Array.isArray(json?.itemsNormalized)) return json.itemsNormalized;
     if (Array.isArray(json?.items)) return json.items;
+
     return [];
   } catch {
     return [];

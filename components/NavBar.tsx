@@ -42,7 +42,9 @@ export default function NavBar() {
               priority
             />
           </div>
-          <span className="hidden text-base font-semibold leading-tight sm:inline">
+
+          {/* Mobil: vis navn + tagline (tidligere skjult) */}
+          <span className="text-sm font-semibold leading-tight sm:text-base">
             Humlum Dartklub
             <span className="block text-xs font-normal text-neutral-500">
               Fællesskab &amp; Præcision

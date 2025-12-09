@@ -1,56 +1,154 @@
-/* [HELP:EVENTS:FILE] START — Forside for events (pladsholdere indtil admin/Sheet er koblet på) */
-export default function EventsPage() {
-  /* [HELP:EVENTS:DATA] START — Pladsholder-data (kan senere komme fra Google Sheets / Admin) */
-  const events = [
-    {
-      id: "e1",
-      date: "Tors 21. nov · 19:00–21:00",
-      title: "Åben Træningsaften",
-      blurb: "Kom og prøv darts i et roligt tempo. Vi hjælper dig i gang – alle niveauer er velkomne.",
-      tags: ["Træning", "For alle", "Gratis"],
-      where: "Klublokalet, Humlum",
-    },
-    {
-      id: "e2",
-      date: "Lør 30. nov · 13:00–17:00",
-      title: "Mini-Turnering (single)",
-      blurb: "Hyggelig turnering for begyndere og let øvede. Vi matcher niveau – det handler om at have det sjovt.",
-      tags: ["Turnering", "Begynder", "Præmier"],
-      where: "Klublokalet",
-    },
-    {
-      id: "e3",
-      date: "Ons 4. dec · 19:00–21:00",
-      title: "Teknikfokus: Doubles under tid",
-      blurb: "Trænerstyret session med fokus på rutine og ro ved doubler – små øvelser og feedback.",
-      tags: ["Træning", "Coaching"],
-      where: "Klublokalet",
-    },
-    {
-      id: "e4",
-      date: "Fre 6. dec · 18:00–21:30",
-      title: "Familieaften & Pizza",
-      blurb: "Tag familien med – vi spiller par-spil, har små udfordringer for børn og hygger med pizza.",
-      tags: ["Familie", "Hygge"],
-      where: "Klublokalet",
-    },
-    {
-      id: "e5",
-      date: "Lør 14. dec · 10:00–16:00",
-      title: "Julecup (par)",
-      blurb: "Venskabelig par-turnering. Nissehuer giver bonus-point 😉",
-      tags: ["Turnering", "Hygge", "Præmier"],
-      where: "Klublokalet",
-    },
-    {
-      id: "e6",
-      date: "Man 6. jan · 19:00–20:30",
-      title: "Opstartsmøde · 2025",
-      blurb: "Vi deler planer for foråret: ungdom, events, sponsorvæg og nye tiltag. Alle kan byde ind.",
-      tags: ["Møde", "Planer"],
-      where: "Klublokalet",
-    },
-  ];
+/* [HELP:EVENTS:FILE] START — Forside for events (Sheet-koblet) */
+
+/* [HELP:EVENTS:TYPES] START */
+type EventRow = {
+  id?: string;
+  title?: string;
+  blurb?: string;
+  body?: string;
+  body_md?: string;
+  date?: string;
+  time_start?: string;
+  time_end?: string;
+  date_label?: string;
+  location?: string;
+  where?: string;
+  tags?: string; // fx "Træning;For alle;Gratis"
+  visible?: string;
+  order?: string | number;
+  badge_label?: string; // valgfri
+  cta_label?: string;   // valgfri
+  cta_url?: string;     // valgfri
+};
+/* [HELP:EVENTS:TYPES] END */
+
+type UiEvent = {
+  id: string;
+  dateLabel: string;
+  title: string;
+  blurb: string;
+  tags: string[];
+  where: string;
+  order: number;
+  badge: string;
+  ctaLabel: string;
+  ctaUrl?: string;
+};
+
+/* [HELP:EVENTS:UTILS] START */
+const isYes = (v: any) => String(v ?? "")
+  .trim()
+  .toUpperCase() === "YES";
+
+const toNum = (v: any, d = 9999) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+};
+
+function normalizeTags(v: any): string[] {
+  const s = String(v ?? "").trim();
+  if (!s) return [];
+  // tillad ; , | som separator
+  return s
+    .split(/[;|,]/g)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function formatDateLabel(row: EventRow): string {
+  const pre = String(row.date_label ?? "").trim();
+  if (pre) return pre;
+
+  const raw = String(row.date ?? "").trim();
+  const ts = String(row.time_start ?? "").trim();
+  const te = String(row.time_end ?? "").trim();
+
+  let datePart = raw;
+  if (raw) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      datePart = d.toLocaleDateString("da-DK", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+    }
+  }
+
+  const timePart = ts && te ? `${ts}–${te}` : ts ? ts : "";
+  if (datePart && timePart) return `${datePart} · ${timePart}`;
+  return datePart || timePart || "";
+}
+
+function getBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000"
+  );
+}
+
+async function loadEventRows(limit = 400): Promise<EventRow[]> {
+  try {
+    const base = getBaseUrl();
+    const url = new URL(`/api/sheet?tab=EVENTS&limit=${limit}`, base).toString();
+    const res = await fetch(url, { cache: "no-store" });
+    const data = await res.json().catch(() => null);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return items as EventRow[];
+  } catch {
+    return [];
+  }
+}
+/* [HELP:EVENTS:UTILS] END */
+
+export default async function EventsPage() {
+  /* [HELP:EVENTS:DATA] START — Sheet data fra EVENTS */
+  const rows = await loadEventRows(400);
+
+  const events: UiEvent[] = (rows || [])
+    .filter(Boolean)
+    .filter((r) => {
+      const vis = String((r as any).visible ?? "").trim();
+      return !vis || isYes(vis);
+    })
+    .map((r, idx) => {
+      const id = String(r.id ?? "").trim() || `evt-${idx}`;
+      const title = String(r.title ?? "").trim();
+      const blurb =
+        String(r.blurb ?? "").trim() ||
+        String(r.body_md ?? "").trim() ||
+        String(r.body ?? "").trim() ||
+        String((r as any).description ?? "").trim();
+
+      const where =
+        String(r.where ?? "").trim() ||
+        String(r.location ?? "").trim();
+
+      const order = toNum(r.order, 9999);
+
+      const badge = String(r.badge_label ?? "").trim() || "Kommer snart";
+
+      const ctaUrl = String(r.cta_url ?? "").trim() || undefined;
+      const ctaLabel =
+        String(r.cta_label ?? "").trim() ||
+        (ctaUrl ? "Læs mere" : "Tilmelding åbner snart");
+
+      return {
+        id,
+        dateLabel: formatDateLabel(r),
+        title: title || "Event",
+        blurb: blurb || "Detaljer følger snart.",
+        tags: normalizeTags(r.tags),
+        where: where || "Klublokalet",
+        order,
+        badge,
+        ctaLabel,
+        ctaUrl,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+
   /* [HELP:EVENTS:DATA] END */
 
   /* [HELP:EVENTS:RENDER] START — hele siderendering */
@@ -69,8 +167,8 @@ export default function EventsPage() {
           </h1>
 
           <p className="mt-2 text-gray-600 text-sm">
-            Turneringer, træning, hyggeaftener og lokale arrangementer.  
-            Kalenderen er aktiv snart – pladsholdere viser, hvad du kan glæde dig til!
+            Turneringer, træning, hyggeaftener og lokale arrangementer.
+            Her vises de events, du har gjort synlige i admin-arket.
           </p>
         </div>
       </header>
@@ -78,58 +176,85 @@ export default function EventsPage() {
 
       {/* [HELP:EVENTS:GRID] START — kortgrid mappet over events */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-        {events.map(evt => (
+        {events.map((evt) => (
           /* [HELP:EVENTS:CARD] START — enkelt event-kort */
           <article
             key={evt.id}
             className="h-full flex flex-col rounded-3xl border border-lime-400 bg-white p-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
           >
             <div className="flex items-start justify-between">
-              <p className="text-xs font-medium text-gray-600">{evt.date}</p>
+              <p className="text-xs font-medium text-gray-600">
+                {evt.dateLabel || "Dato følger"}
+              </p>
               <span className="text-[10px] rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-gray-700">
-                Kommer snart
+                {evt.badge}
               </span>
             </div>
 
-            <h2 className="mt-2 text-lg font-semibold text-gray-900">{evt.title}</h2>
+            <h2 className="mt-2 text-lg font-semibold text-gray-900">
+              {evt.title}
+            </h2>
+
             <p className="mt-2 text-sm text-gray-700">{evt.blurb}</p>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {evt.tags.map((t, i) => (
-                <span
-                  key={i}
-                  className="text-xs rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-gray-700"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
+            {!!evt.tags.length && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {evt.tags.map((t, i) => (
+                  <span
+                    key={i}
+                    className="text-xs rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-gray-700"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="mt-3 text-xs text-gray-500">📍 {evt.where}</div>
 
             <div className="mt-auto pt-4">
-              <button
-                type="button"
-                disabled
-                className="w-full rounded-xl px-4 py-2 font-semibold border bg-gray-100 text-gray-500 cursor-not-allowed"
-                title="Integration kommer snart"
-              >
-                Tilmelding åbner snart
-              </button>
+              {evt.ctaUrl ? (
+                <a
+                  href={evt.ctaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex justify-center rounded-xl px-4 py-2 font-semibold border bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  {evt.ctaLabel}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full rounded-xl px-4 py-2 font-semibold border bg-gray-100 text-gray-500 cursor-not-allowed"
+                  title="Integration kommer snart"
+                >
+                  {evt.ctaLabel}
+                </button>
+              )}
             </div>
           </article>
           /* [HELP:EVENTS:CARD] END */
         ))}
+
+        {!events.length && (
+          <article className="rounded-3xl border border-lime-200 bg-white p-6 text-sm text-gray-600">
+            Ingen events er synlige endnu.
+            Sæt <strong>visible=YES</strong> i fanen <strong>EVENTS</strong>.
+          </article>
+        )}
       </section>
       {/* [HELP:EVENTS:GRID] END */}
 
       {/* [HELP:EVENTS:FOOTNOTE] START — note under grid */}
       <p className="mt-8 text-xs text-gray-500">
-        Tip: Når vi kobler til admin, kan du filtrere pr. type (Træning / Turnering / Familie), vise billeder og aktivere “Tilmeld via formular”.
+        Tip: Du kan styre rækkefølge med <strong>order</strong> og tags med
+        <strong> tags</strong> (fx “Træning;Familie;Gratis”).
       </p>
       {/* [HELP:EVENTS:FOOTNOTE] END */}
     </main>
   );
   /* [HELP:EVENTS:RENDER] END */
 }
+
 /* [HELP:EVENTS:FILE] END */
