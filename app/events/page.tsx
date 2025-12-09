@@ -1,26 +1,34 @@
+"use client";
+
 /* [HELP:EVENTS:FILE] START — Forside for events (Sheet-koblet) */
+
+import { useEffect, useMemo, useState } from "react";
 
 /* [HELP:EVENTS:TYPES] START */
 type EventRow = {
+  key?: string;
   id?: string;
-  title?: string;
-  blurb?: string;
-  body?: string;
-  body_md?: string;
+
   date?: string;
   time_start?: string;
   time_end?: string;
-  date_label?: string;
+
+  title?: string;
+  description?: string;
+
   location?: string;
-  where?: string;
-  tags?: string; // fx "Træning;For alle;Gratis"
+  contact_email?: string;
+
+  tags?: string;
+
+  badge_label?: string;
+  cta_label?: string;
+  cta_url?: string;
+
+  signup_required?: string;
   visible?: string;
   order?: string | number;
-  badge_label?: string; // valgfri
-  cta_label?: string;   // valgfri
-  cta_url?: string;     // valgfri
 };
-/* [HELP:EVENTS:TYPES] END */
 
 type UiEvent = {
   id: string;
@@ -29,18 +37,15 @@ type UiEvent = {
   blurb: string;
   tags: string[];
   where: string;
-  order: number;
   badge: string;
   ctaLabel: string;
   ctaUrl?: string;
+  order: number;
 };
+/* [HELP:EVENTS:TYPES] END */
 
 /* [HELP:EVENTS:UTILS] START */
-const isYes = (v: any) => {
-  const s = String(v ?? "").trim().toUpperCase();
-  return s === "YES" || s === "TRUE" || s === "1" || s === "Y";
-};
-
+const isYes = (v: any) => String(v ?? "").trim().toUpperCase() === "YES";
 
 const toNum = (v: any, d = 9999) => {
   const n = Number(v);
@@ -50,20 +55,16 @@ const toNum = (v: any, d = 9999) => {
 function normalizeTags(v: any): string[] {
   const s = String(v ?? "").trim();
   if (!s) return [];
-  // tillad ; , | som separator
   return s
     .split(/[;|,]/g)
     .map((x) => x.trim())
     .filter(Boolean);
 }
 
-function formatDateLabel(row: EventRow): string {
-  const pre = String(row.date_label ?? "").trim();
-  if (pre) return pre;
-
-  const raw = String(row.date ?? "").trim();
-  const ts = String(row.time_start ?? "").trim();
-  const te = String(row.time_end ?? "").trim();
+function formatDateLabel(r: EventRow): string {
+  const raw = String(r.date ?? "").trim();
+  const ts = String(r.time_start ?? "").trim();
+  const te = String(r.time_end ?? "").trim();
 
   let datePart = raw;
   if (raw) {
@@ -81,86 +82,93 @@ function formatDateLabel(row: EventRow): string {
   if (datePart && timePart) return `${datePart} · ${timePart}`;
   return datePart || timePart || "";
 }
-
-function getBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-    "http://localhost:3000"
-  );
-}
-
-async function loadEventRows(limit = 400): Promise<EventRow[]> {
-  try {
-    const base = getBaseUrl();
-    const url = new URL(`/api/sheet?tab=EVENTS&limit=${limit}`, base).toString();
-
-    const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json().catch(() => null);
-
-    const arr =
-      (Array.isArray(data?.items) && data.items) ||
-      (Array.isArray(data?.rows) && data.rows) ||
-      (Array.isArray(data?.itemsNormalized) && data.itemsNormalized) ||
-      [];
-
-    return arr as EventRow[];
-  } catch {
-    return [];
-  }
-}
-
-
 /* [HELP:EVENTS:UTILS] END */
 
-export default async function EventsPage() {
-  /* [HELP:EVENTS:DATA] START — Sheet data fra EVENTS */
-  const rows = await loadEventRows(400);
+export default function EventsPage() {
+  /* [HELP:EVENTS:STATE] START */
+  const [rows, setRows] = useState<EventRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  /* [HELP:EVENTS:STATE] END */
 
-  const events: UiEvent[] = (rows || [])
-    .filter(Boolean)
-    .filter((r) => {
-      const vis = String((r as any).visible ?? "").trim();
-      return !vis || isYes(vis);
-    })
-    .map((r, idx) => {
-      const id = String(r.id ?? "").trim() || `evt-${idx}`;
-      const title = String(r.title ?? "").trim();
-      const blurb =
-        String(r.blurb ?? "").trim() ||
-        String(r.body_md ?? "").trim() ||
-        String(r.body ?? "").trim() ||
-        String((r as any).description ?? "").trim();
+  /* [HELP:EVENTS:LOAD] START — hent EVENTS fra /api/sheet */
+  useEffect(() => {
+    let alive = true;
 
-      const where =
-        String(r.where ?? "").trim() ||
-        String(r.location ?? "").trim();
+    (async () => {
+      try {
+        const res = await fetch("/api/sheet?tab=EVENTS&limit=400", {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => null);
+        const items = Array.isArray(data?.items) ? data.items : [];
 
-      const order = toNum(r.order, 9999);
+        if (!alive) return;
+        setRows(items as EventRow[]);
+      } catch {
+        if (!alive) return;
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
 
-      const badge = String(r.badge_label ?? "").trim() || "Kommer snart";
+    return () => {
+      alive = false;
+    };
+  }, []);
+  /* [HELP:EVENTS:LOAD] END */
 
-      const ctaUrl = String(r.cta_url ?? "").trim() || undefined;
-      const ctaLabel =
-        String(r.cta_label ?? "").trim() ||
-        (ctaUrl ? "Læs mere" : "Tilmelding åbner snart");
+  /* [HELP:EVENTS:MAP] START */
+  const events = useMemo<UiEvent[]>(() => {
+    const mapped = (rows || [])
+      .filter(Boolean)
+      .filter((r) => {
+        const vis = String(r.visible ?? "").trim();
+        return !vis || isYes(vis);
+      })
+      .map((r, idx) => {
+        const id =
+          String(r.key ?? r.id ?? "").trim() || `evt-${idx}`;
 
-      return {
-        id,
-        dateLabel: formatDateLabel(r),
-        title: title || "Event",
-        blurb: blurb || "Detaljer følger snart.",
-        tags: normalizeTags(r.tags),
-        where: where || "Klublokalet",
-        order,
-        badge,
-        ctaLabel,
-        ctaUrl,
-      };
-    })
-    .sort((a, b) => a.order - b.order);
+        const title = String(r.title ?? "").trim() || "Event";
 
-  /* [HELP:EVENTS:DATA] END */
+        const blurb =
+          String(r.description ?? "").trim() ||
+          "Detaljer følger snart.";
+
+        const where =
+          String(r.location ?? "").trim() || "Klublokalet";
+
+        const badge =
+          String(r.badge_label ?? "").trim() || "Kommer snart";
+
+        const ctaUrl = String(r.cta_url ?? "").trim() || undefined;
+
+        const ctaLabel =
+          String(r.cta_label ?? "").trim() ||
+          (ctaUrl ? "Læs mere" : "Tilmelding åbner snart");
+
+        const order = toNum(r.order, 9999);
+
+        return {
+          id,
+          dateLabel: formatDateLabel(r),
+          title,
+          blurb,
+          tags: normalizeTags(r.tags),
+          where,
+          badge,
+          ctaLabel,
+          ctaUrl,
+          order,
+        };
+      })
+      .sort((a, b) => a.order - b.order);
+
+    return mapped;
+  }, [rows]);
+  /* [HELP:EVENTS:MAP] END */
 
   /* [HELP:EVENTS:RENDER] START — hele siderendering */
   return (
@@ -178,8 +186,8 @@ export default async function EventsPage() {
           </h1>
 
           <p className="mt-2 text-gray-600 text-sm">
-            Turneringer, træning, hyggeaftener og lokale arrangementer.
-            Her vises de events, du har gjort synlige i admin-arket.
+            Turneringer, træning, hyggeaftener og lokale arrangementer. Her
+            vises de events, du har gjort synlige i admin-arket.
           </p>
         </div>
       </header>
@@ -205,7 +213,6 @@ export default async function EventsPage() {
             <h2 className="mt-2 text-lg font-semibold text-gray-900">
               {evt.title}
             </h2>
-
             <p className="mt-2 text-sm text-gray-700">{evt.blurb}</p>
 
             {!!evt.tags.length && (
@@ -248,10 +255,10 @@ export default async function EventsPage() {
           /* [HELP:EVENTS:CARD] END */
         ))}
 
-        {!events.length && (
-          <article className="rounded-3xl border border-lime-200 bg-white p-6 text-sm text-gray-600">
-            Ingen events er synlige endnu.
-            Sæt <strong>visible=YES</strong> i fanen <strong>EVENTS</strong>.
+        {!loading && !events.length && (
+          <article className="rounded-3xl border border-lime-300/40 bg-white/60 p-6 text-sm text-gray-600">
+            Ingen events er synlige endnu. Sæt <strong>visible=YES</strong> i
+            fanen <strong>EVENTS</strong>.
           </article>
         )}
       </section>
