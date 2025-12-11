@@ -15,12 +15,22 @@ const CLICK_MAX = 100_000;
 /* [HELP:SPONSOR:CONFIG:LIMITS] END */
 
 /* [HELP:SPONSOR:FORM:LINK] START — URL til sponsor-tilmeldingsskema */
-const SPONSOR_FORM_HREF = "/sponsor/tilmelding"; // <- juster hvis du har en anden sti
+const SPONSOR_FORM_HREF = "/sponsor/tilmelding";
 /* [HELP:SPONSOR:FORM:LINK] END */
 
 /* [HELP:SPONSOR:SHEET:CONFIG] START — læs sponsorpakker fra HDK_Admin_v3 */
 const SHEET_KEY = "hdk-admin-dev";
 const SHEET_TAB_SPONSOR = "SPONSORPAKKER";
+
+/**
+ * Fane der styrer banesponsor-baner og om de er optaget
+ * Kolonner (eksempel):
+ *  - bane (1–6)
+ *  - optaget (YES/TRUE/1 = optaget)
+ *  - sponsor_navn (valgfrit)
+ *  - note (valgfrit)
+ */
+const SHEET_TAB_BANESPONSOR_LANES = "BANESPONSOR_BANER";
 
 type SheetRow = { [key: string]: any };
 
@@ -45,7 +55,8 @@ function isTruthyYes(value: any): boolean {
 /* [HELP:SPONSOR:TYPES] START
  * Pitch: Typer til pakker og tilkøb.
  * [HELP:SPONSOR:TYPES] END */
-type PackageKey = string; // dynamisk, kommer fra sheet (package_key/key)
+type PackageKey = string;
+
 type Package = {
   key: PackageKey;
   name: string;
@@ -59,15 +70,16 @@ type Package = {
 };
 
 type AddOnKey = "youth" | "events" | "gear";
+
 type AddOn = {
   key: AddOnKey;
   name: string;
   icon: string;
-  // Én pris-type pr. tilkøb (enten monthly ELLER yearly)
   monthly?: number;
   yearly?: number;
   hint?: string;
 };
+/* [HELP:SPONSOR:TYPES] END */
 
 /* [HELP:SPONSOR:PACKAGES:FALLBACK] START
  * Pitch: Fallback hvis Sheet ikke kan læses (bruges kun ved fejl).
@@ -110,6 +122,7 @@ const FALLBACK_PACKAGES: Package[] = [
     ],
   },
 ];
+/* [HELP:SPONSOR:PACKAGES:FALLBACK] END */
 
 /* [HELP:SPONSOR:ADDONS:DATA] START
  * Pitch: Tilkøb. Ret navn/ikon/priser/hint her.
@@ -132,12 +145,25 @@ const ADDONS: AddOn[] = [
   },
   {
     key: "gear",
-    name: "Udstyr sponsor",
+    name: "Banesponsor",
     icon: "🎯",
     yearly: 1500,
-    hint: "Bidrag til tavler, stativer og materialer",
+    hint: "Bidrag til tavler, stativer og materialer. Logo ved den ønskede bane i klubben.",
   },
 ];
+/* [HELP:SPONSOR:ADDONS:DATA] END */
+
+/* [HELP:SPONSOR:BANES] START
+ * Banesponsor-konfiguration (kan ændres senere)
+ * [HELP:SPONSOR:BANES] END */
+const BANESPONSOR_ADDON_KEY: AddOnKey = "gear";
+const BANESPONSOR_LANES: number[] = [1, 2, 3, 4, 5, 6];
+
+/**
+ * Fallback for optagede baner, hvis BANESPONSOR_BANER-fanen ikke findes
+ * eller er tom. Normalt vil du bare lade den være tom og styre alt via arket.
+ */
+const BANESPONSOR_TAKEN_LANES_FALLBACK: number[] = [];
 
 /* [HELP:SPONSOR:UTILS] START
  * Pitch: Små hjælpefunktioner og formattering.
@@ -147,7 +173,10 @@ const fmt = new Intl.NumberFormat("da-DK", {
   currency: "DKK",
   maximumFractionDigits: 0,
 });
-const fmt0 = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 0 });
+
+const fmt0 = new Intl.NumberFormat("da-DK", {
+  maximumFractionDigits: 0,
+});
 
 /* [HELP:SPONSOR:UTILS:CLAMP] START — begræns tal mellem min/max */
 const clamp = (n: number, min: number, max: number) =>
@@ -206,15 +235,13 @@ function mapSheetRowToPackage(row: SheetRow): Package | null {
 
   let icon = normalizeString(row["icon"]);
 
-  // Smart ikon-fallback: hvis arket ikke har ikon udfyldt,
-  // så giver vi Bronze/Sølv/Guld deres pokaler alligevel.
   if (!icon) {
     const k = key.toLowerCase();
     if (k.includes("bronze")) icon = "🥉";
     else if (k.includes("sølv") || k.includes("solv") || k.includes("silver"))
       icon = "🥈";
     else if (k.includes("guld") || k.includes("gold")) icon = "🥇";
-    else icon = "🎯"; // absolut fallback
+    else icon = "🎯";
   }
 
   const featured =
@@ -234,7 +261,6 @@ function mapSheetRowToPackage(row: SheetRow): Package | null {
   };
 }
 /* [HELP:SPONSOR:SHEET:MAP] END */
-
 
 /* ======================================
    Komponent
@@ -271,10 +297,9 @@ export default function SponsorPage() {
           .map(mapSheetRowToPackage)
           .filter((p): p is Package => !!p);
 
-        // Sortér efter "order" hvis feltet findes, ellers behold rækkefølge
         mapped.sort((a, b) => {
-          const ao = Number(a as any["order"] ?? (a.featured ? 0 : 999));
-          const bo = Number(b as any["order"] ?? (b.featured ? 0 : 999));
+          const ao = Number((a as any)["order"] ?? (a.featured ? 0 : 999));
+          const bo = Number((b as any)["order"] ?? (b.featured ? 0 : 999));
           return ao - bo;
         });
 
@@ -293,6 +318,55 @@ export default function SponsorPage() {
     })();
   }, []);
   /* [HELP:SPONSOR:STATE:PACKAGES] END */
+
+  /* [HELP:SPONSOR:STATE:BANE-LANES] START — optagede baner fra Sheet */
+  const [takenLanes, setTakenLanes] = useState<number[]>(
+    BANESPONSOR_TAKEN_LANES_FALLBACK,
+  );
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/sheet?tab=${encodeURIComponent(
+            SHEET_TAB_BANESPONSOR_LANES,
+          )}&key=${encodeURIComponent(SHEET_KEY)}`,
+        );
+        if (!res.ok) return;
+
+        const data = (await res.json()) as ApiListResponse;
+        if (!data.ok || !data.items?.length) return;
+
+        const lanes = data.items
+          .map((row) => {
+            const laneRaw =
+              row["bane"] ??
+              row["lane"] ??
+              row["nr"] ??
+              row["id"] ??
+              "";
+            const lane = Number(laneRaw);
+            if (!lane) return null;
+
+            const taken = isTruthyYes(
+              row["optaget"] ??
+                row["taken"] ??
+                row["occupied"] ??
+                row["active"],
+            );
+            return taken ? lane : null;
+          })
+          .filter((v): v is number => v != null);
+
+        if (lanes.length) {
+          setTakenLanes(lanes);
+        }
+      } catch (err) {
+        console.error("Fejl ved hentning af BANESPONSOR_BANER", err);
+      }
+    })();
+  }, []);
+  /* [HELP:SPONSOR:STATE:BANE-LANES] END */
 
   /* [HELP:SPONSOR:STATE:PACKAGE] START — valgt pakke (klik igen for at fjerne) */
   const [selected, setSelected] = useState<PackageKey | null>(null);
@@ -313,6 +387,7 @@ export default function SponsorPage() {
     arrangementer: false,
     drift: false,
   });
+
   const toggleTag = (k: keyof typeof tags) =>
     setTags((t) => ({ ...t, [k]: !t[k] }));
   /* [HELP:SPONSOR:STATE:EARMARK] END */
@@ -325,8 +400,28 @@ export default function SponsorPage() {
     events: false,
     gear: false,
   });
+
+  const [selectedLane, setSelectedLane] = useState<number | null>(null);
+
   const toggleAddon = (k: AddOnKey) =>
-    setSelectedAddOns((s) => ({ ...s, [k]: !s[k] }));
+    setSelectedAddOns((s) => {
+      const next = !s[k];
+      const updated = { ...s, [k]: next };
+      if (k === BANESPONSOR_ADDON_KEY && !next) {
+        setSelectedLane(null);
+      }
+      return updated;
+    });
+
+  const handleSelectLane = (lane: number) => {
+    if (takenLanes.includes(lane)) return;
+
+    setSelectedLane(lane);
+    setSelectedAddOns((s) => ({
+      ...s,
+      [BANESPONSOR_ADDON_KEY]: true,
+    }));
+  };
   /* [HELP:SPONSOR:STATE:ADDONS] END */
 
   /* [HELP:SPONSOR:COMPUTE:BASE] START — pris for valgt pakke */
@@ -374,78 +469,158 @@ export default function SponsorPage() {
     () => Object.values(selectedAddOns).some(Boolean),
     [selectedAddOns],
   );
+
   const readyForForm = Boolean(selected || clickActive || anyAddon);
   /* [HELP:SPONSOR:COMPUTE:READY] END */
 
-  /* [HELP:SPONSOR:SUMMARY:BUILD] START — generér tekstopsummering til print/kopi/mail */
+  /* [HELP:SPONSOR:SUMMARY:BUILD] START — kompakt tekst til opsummering */
   const buildSummaryText = () => {
-    const p = packages.find((x) => x.key === selected);
+    const selectedPkg = packages.find((x) => x.key === selected) ?? null;
+    const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]);
+
     const lines: string[] = [];
-    lines.push("Humlum Dartklub — Sponsoropsummering");
-    lines.push("==================================");
-    if (p) {
+
+    if (selectedPkg) {
       lines.push(
-        `Pakke: ${p.name} (${fmt.format(p.priceYear)}${
-          p.priceUnit ? " / " + p.priceUnit : "/år"
-        })`,
+        `Pakke: ${selectedPkg.name} (${fmt.format(selectedPkg.priceYear)}/år)`,
       );
     } else {
       lines.push("Pakke: (ingen valgt)");
     }
-    if (clickActive) {
-      lines.push(`Ét-klik støtte: ${fmt.format(oneClick)} (engang)`);
-      if (clickAnon) lines.push(`  • Anonym støtte: JA`);
-      if (earmarkList.length)
-        lines.push(`  • Øremærkning: ${earmarkList.join(", ")}`);
-    }
-    const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]);
+
     if (chosenAddons.length) {
+      lines.push("");
       lines.push("Tilkøb:");
       chosenAddons.forEach((a) => {
-        lines.push(`  • ${a.name} (${addonPriceLabel(a)})`);
+        let label = `${a.name}`;
+        const price = addonPriceLabel(a);
+        if (price) label += ` (${price})`;
+
+        if (a.key === BANESPONSOR_ADDON_KEY && selectedLane != null) {
+          label += ` – ønsket bane: ${selectedLane}`;
+        }
+
+        lines.push(`  • ${label}`);
       });
     }
+
+    if (clickActive) {
+      lines.push("");
+      lines.push(`Ét-klik støtte: ${fmt.format(oneClick)} (engang)`);
+      if (clickAnon) lines.push("  • Anonym støtte: JA");
+      if (earmarkList.length) {
+        lines.push(
+          `  • Ønsket anvendelse: ${earmarkList.join(", ")}`,
+        );
+      }
+    }
+
+    lines.push("");
     lines.push("----------------------------------");
     lines.push(`I alt pr. år:    ${fmt.format(totalYear)}`);
     lines.push(`Ca. pr. måned:  ${fmt.format(totalMonth)}`);
+    lines.push("");
+    lines.push("Tak for at støtte Humlum Dartklub – Fællesskab & Præcision.");
+
     return lines.join("\n");
   };
   /* [HELP:SPONSOR:SUMMARY:BUILD] END */
 
-  /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — print / kopiér / mail knappernes logik */
-  const handlePrint = () => {
-    const w = window.open(
-      "",
-      "_blank",
-      "noopener,noreferrer,width=800,height=900",
-    );
-    if (!w) return;
-    w.document.write(
-      `<pre style="font:14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:16px;">${buildSummaryText()}</pre>`,
-    );
-    w.document.close();
-    w.focus();
-    w.print();
-  };
+  /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — download / mail / form knappernes logik */
+  const SPONSOR_AGREEMENT_PDF = "/docs/HDK_Sponsoraftale.pdf";
+  const BANESPONSOR_AGREEMENT_PDF = "/docs/HDK_Banesponsor_aftale.pdf";
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(buildSummaryText());
-      alert("Teksten er kopieret til udklipsholderen.");
-    } catch {
-      alert("Kunne ikke kopiere. Prøv print i stedet.");
-    }
+  const CLUB_EMAIL = "humlumdartklub@gmail.com";
+
+  const SPONSOR_SELECTION_STORAGE_KEY = "hdk:sponsor:selection:v1";
+
+  const buildSelectionPayload = () => {
+    const p = packages.find((x) => x.key === selected) ?? null;
+
+    const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]).map(
+      (a) => ({
+        key: a.key,
+        name: a.name,
+        monthly: a.monthly ?? null,
+        yearly: a.yearly ?? null,
+        ...(a.key === BANESPONSOR_ADDON_KEY && selectedLane != null
+          ? { lane: selectedLane }
+          : {}),
+      }),
+    );
+
+    const oneClickPayload = clickActive
+      ? {
+          amount: oneClick,
+          anonymous: clickAnon,
+          earmarks: earmarkList,
+        }
+      : null;
+
+    const summaryText = buildSummaryText();
+
+    return {
+      package: p
+        ? { key: p.key, name: p.name, priceYear: p.priceYear }
+        : null,
+      addOns: chosenAddons,
+      oneClick: oneClickPayload,
+      totals: { year: totalYear, month: totalMonth },
+      summaryText,
+      createdAt: new Date().toISOString(),
+    };
   };
 
   const handleMail = () => {
     const body = encodeURIComponent(buildSummaryText());
-    window.location.href = `mailto:?subject=Sponsoropsummering%20-%20Humlum%20Dartklub&body=${body}`;
+    const subject = encodeURIComponent(
+      "Sponsoropsummering - Humlum Dartklub",
+    );
+    window.location.href = `mailto:${CLUB_EMAIL}?subject=${subject}&body=${body}`;
+  };
+
+  const handleOpenForm = () => {
+    const payload = buildSelectionPayload();
+
+    try {
+      localStorage.setItem(
+        SPONSOR_SELECTION_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+    } catch {
+      // ignore storage errors
+    }
+
+    const qs = new URLSearchParams();
+
+    if (payload.summaryText) qs.set("prefill", payload.summaryText);
+    if (payload.package?.name) qs.set("pkg", payload.package.name);
+
+    if (payload.addOns?.length) {
+      qs.set(
+        "addons",
+        payload.addOns.map((a) => a.name).join(", "),
+      );
+    }
+
+    if (payload.oneClick?.amount) {
+      qs.set("click", String(payload.oneClick.amount));
+      if (payload.oneClick.anonymous) qs.set("anon", "1");
+      if (payload.oneClick.earmarks?.length) {
+        qs.set("earmarks", payload.oneClick.earmarks.join(", "));
+      }
+    }
+
+    qs.set("totalYear", String(payload.totals.year));
+
+    window.location.href = `${SPONSOR_FORM_HREF}?${qs.toString()}`;
   };
   /* [HELP:SPONSOR:SUMMARY:ACTIONS] END */
 
   /* ======================================
      UI
      ====================================== */
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* [HELP:SPONSOR:SECTION:INTRO] START — sideintro (kicker, titel, undertekst) */}
@@ -457,9 +632,10 @@ export default function SponsorPage() {
         <h1 className="section-title">Støt Humlum Dartklub</h1>
         <div className="section-underline" />
         <p className="section-subtitle">
-          Vælg en pakke og/eller støt med et valgfrit beløb. Opsummeringen kan
-          printes, kopieres eller sendes som e-mail.
+          Vælg en pakke og/eller støt med et valgfrit beløb. Du kan downloade
+          aftalerne, sende en opsummering som e-mail eller udfylde sponsor-skemaet.
         </p>
+
         {packagesError && (
           <p className="mt-2 text-xs text-red-600">
             {packagesError}
@@ -518,6 +694,7 @@ export default function SponsorPage() {
                 </ul>
 
                 <button
+                  type="button"
                   onClick={() => setSelected(isSel ? null : p.key)}
                   className="mt-auto w-full btn btn-primary"
                 >
@@ -543,11 +720,11 @@ export default function SponsorPage() {
               </span>
             </div>
 
-            {/* Quick beløb */}
             <div className="mt-3 flex flex-wrap gap-2">
               {quick.map((q) => (
                 <button
                   key={q}
+                  type="button"
                   className={[
                     "rounded-full border px-3 py-1 text-sm",
                     q === clickAmount
@@ -564,7 +741,6 @@ export default function SponsorPage() {
               ))}
             </div>
 
-            {/* Beløb input */}
             <div className="mt-3">
               <label className="text-sm">Beløb</label>
               <input
@@ -590,7 +766,6 @@ export default function SponsorPage() {
               </p>
             </div>
 
-            {/* Øremærkning – fold-out */}
             <details className="mt-3 rounded-xl border border-lime-300/60 bg-gray-50 p-3">
               <summary className="cursor-pointer text-sm">
                 Øremærkning (valgfrit)
@@ -651,6 +826,7 @@ export default function SponsorPage() {
             </details>
 
             <button
+              type="button"
               onClick={() => setClickActive(!clickActive)}
               className="mt-auto w-full btn btn-primary"
             >
@@ -672,6 +848,7 @@ export default function SponsorPage() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ADDONS.map((a) => {
             const active = !!selectedAddOns[a.key];
+            const isBane = a.key === BANESPONSOR_ADDON_KEY;
             return (
               <div
                 key={a.key}
@@ -691,17 +868,65 @@ export default function SponsorPage() {
                     {addonPriceLabel(a)}
                   </span>
                 </div>
-                {a.hint && (
-                  <p className="mt-1 text-xs text-gray-600 min-h-[36px]">
-                    {a.hint}
-                  </p>
+
+                {a.hint && !isBane && (
+                  <p className="mt-2 text-sm text-gray-600">{a.hint}</p>
                 )}
-                <button
-                  onClick={() => toggleAddon(a.key)}
-                  className="mt-auto w-full btn btn-primary"
-                >
-                  {active ? "Tilvalgt" : "Vælg"}
-                </button>
+
+                {isBane && (
+                  <div className="mt-3 rounded-2xl border border-lime-200 bg-lime-50/60 p-3">
+                    <p className="text-xs font-semibold text-gray-800">
+                      Ønsket bane
+                    </p>
+                    <p className="mt-1 text-xs text-gray-700">
+                      Vælg hvilken bane I primært ønsker at støtte. Antal baner
+                      og endelig aftale fastlægges sammen med klubben.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {BANESPONSOR_LANES.map((lane) => {
+                        const laneActive = selectedLane === lane;
+                        const laneTaken = takenLanes.includes(lane);
+                        return (
+                          <button
+                            key={lane}
+                            type="button"
+                            disabled={laneTaken}
+                            onClick={() => handleSelectLane(lane)}
+                            className={[
+                              "rounded-full px-3 py-1 text-xs border",
+                              laneTaken
+                                ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through"
+                                : laneActive
+                                  ? "bg-lime-500 text-white border-lime-500"
+                                  : "bg-white text-gray-800 border-lime-300 hover:bg-lime-50",
+                            ].join(" ")}
+                          >
+                            {`Bane ${lane}${laneTaken ? " (optaget)" : ""}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedLane != null && active && (
+                      <p className="mt-2 text-[11px] text-gray-700">
+                        Valgt bane:{" "}
+                        <span className="font-semibold">
+                          Bane {selectedLane}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-auto pt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleAddon(a.key)}
+                    className="w-full btn btn-primary"
+                  >
+                    {active ? "Fjern tilkøb" : "Vælg tilkøb"}
+                  </button>
+                  {/* Banesponsor-aftale PDF-link er flyttet til opsummeringsfeltet nederst */}
+                </div>
               </div>
             );
           })}
@@ -709,71 +934,82 @@ export default function SponsorPage() {
       </section>
       {/* [HELP:SPONSOR:SECTION:ADDONS] END */}
 
-      {/* [HELP:SPONSOR:SECTION:SUMMARY] START — opsummering + handlinger */}
+      {/* [HELP:SPONSOR:SECTION:SUMMARY] START — opsummering & CTA */}
       <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
         <div className="kicker">
           <span className="h-2 w-2 rounded-full bg-lime-500" />
-          OPSUMMERING
+          OPSUMMERING &amp; NÆSTE SKRIDT
         </div>
 
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
-          {/* [HELP:SPONSOR:SUMMARY:LEFT] START — talboks (pakke/tilkøb/engang) */}
-          <div className="rounded-xl border border-lime-300/60 bg-lime-50 p-4 text-sm">
-            <dl className="space-y-2">
-              <div className="flex justify-between">
-                <dt>Pakke</dt>
-                <dd className="font-semibold">
-                  {selected
-                    ? packages.find((x) => x.key === selected)?.name
-                    : "(ingen)"}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Pakke pr. år</dt>
-                <dd>{fmt.format(baseYear)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Tilkøb pr. år</dt>
-                <dd>{fmt.format(addOnsYear)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Tilkøb pr. måned</dt>
-                <dd>{fmt.format(addOnsMonth)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Ét-klik støtte</dt>
-                <dd>{fmt.format(oneClick)}</dd>
-              </div>
-            </dl>
+        <div className="mt-4 grid gap-6 lg:grid-cols-[2fr,1fr] items-start">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">
+              Din nuværende opsætning
+            </h3>
+            <pre className="mt-2 whitespace-pre-wrap rounded-2xl bg-gray-50 p-4 text-xs font-mono text-gray-800">
+              {buildSummaryText()}
+            </pre>
           </div>
-          {/* [HELP:SPONSOR:SUMMARY:LEFT] END */}
 
-          {/* [HELP:SPONSOR:SUMMARY:RIGHT] START — total + knapper */}
-          <div className="rounded-xl border border-lime-300/60 bg-white p-4">
-            <p className="text-lg">I alt pr. år</p>
-            <p className="text-3xl font-extrabold text-gray-900">
-              {fmt.format(totalYear)}
-            </p>
-            <p className="mt-1 text-sm opacity-70">
-              ca. {fmt.format(totalMonth)} pr. måned
-            </p>
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-lime-50 p-4 text-sm text-gray-900">
+              <p className="font-semibold">Økonomi (estimat)</p>
+              <p className="mt-1">
+                Årligt samlet:{" "}
+                <span className="font-bold">{fmt.format(totalYear)}</span>
+              </p>
+              <p>
+                Ca. pr. måned:{" "}
+                <span className="font-bold">{fmt.format(totalMonth)}</span>
+              </p>
+            </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={handlePrint} className="btn btn-primary">
-                Print
-              </button>
-              <button onClick={handleCopy} className="btn btn-primary">
-                Kopiér tekst
-              </button>
-              <button onClick={handleMail} className="btn btn-primary">
-                Send mail
-              </button>
-              <a href={SPONSOR_FORM_HREF} className="btn btn-primary">
-                Udfyld sponsor-skema
+            <div className="flex flex-col gap-2 text-sm">
+              <a
+                href={SPONSOR_AGREEMENT_PDF}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-secondary text-center"
+              >
+                Download sponsoraftale (PDF)
               </a>
+
+              <a
+                href={BANESPONSOR_AGREEMENT_PDF}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-secondary text-center"
+              >
+                Download banesponsor-aftale (PDF)
+              </a>
+
+              <button
+                type="button"
+                onClick={handleMail}
+                className="btn btn-secondary text-center"
+              >
+                Send opsummering som e-mail
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenForm}
+                disabled={!readyForForm}
+                className={`btn btn-primary text-center ${
+                  !readyForForm ? "opacity-60 cursor-not-allowed" : ""
+                }`}
+              >
+                Udfyld sponsor-skema
+              </button>
+
+              {!readyForForm && (
+                <p className="text-[11px] text-gray-600">
+                  Vælg mindst én pakke, et tilkøb eller ét-klik støtte, før du
+                  går videre til sponsor-skemaet.
+                </p>
+              )}
             </div>
           </div>
-          {/* [HELP:SPONSOR:SUMMARY:RIGHT] END */}
         </div>
       </section>
       {/* [HELP:SPONSOR:SECTION:SUMMARY] END */}

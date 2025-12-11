@@ -346,24 +346,25 @@ export default function OmPage() {
   }, []);
   /** [HELP:OM:SCROLL] END */
 
-  /** [HELP:OM:BOOKING:HANDLERS] START */
+    /** [HELP:OM:BOOKING:HANDLERS] START */
   const openBooking = useCallback(() => {
     setShowBooking(true);
     setMsg(null);
     setSuccess(false);
   }, []);
 
-  const closeBooking = useCallback(() => setShowBooking(false), []);
+  const closeBooking = useCallback(() => {
+    setShowBooking(false);
+  }, []);
 
   async function submitBooking() {
     setMsg(null);
 
-    if (!name || !email || !selectedDate || !selectedTime) {
+    if (!name || !email || !selectedDate) {
       const missing = [
         !name ? "navn" : null,
         !email ? "e-mail" : null,
-        !selectedDate ? "dato" : null,
-        !selectedTime ? "tidspunkt" : null,
+        !selectedDate ? "ønsket træningsdag" : null,
       ]
         .filter(Boolean)
         .join(", ");
@@ -374,8 +375,10 @@ export default function OmPage() {
     setBusy(true);
     try {
       await createTryoutBooking({
+        // vi bruger nu "date" som ønsket træningsdag (fx "Tirsdag 19:00-21:00")
         date: selectedDate,
-        time: selectedTime,
+        // tid er ikke længere vigtig – vi sender bare tom streng
+        time: selectedTime || "",
         name,
         email,
         phone,
@@ -387,6 +390,8 @@ export default function OmPage() {
       setEmail("");
       setPhone("");
       setNote("");
+      setSelectedDate("");
+      setSelectedTime("");
     } catch (err: any) {
       setMsg(err?.message || "Der opstod en fejl ved booking. Prøv igen.");
     } finally {
@@ -394,6 +399,7 @@ export default function OmPage() {
     }
   }
   /** [HELP:OM:BOOKING:HANDLERS] END */
+
 
   /** [HELP:OM:RENDER:TOPNAV_ITEM] START */
   function renderTopNavItem(r: OmRow) {
@@ -948,23 +954,22 @@ export default function OmPage() {
       </section>
       {/* [HELP:OM:BOTTOM] END */}
 
-      {/* BOOKING MODAL */}
-      {/* [HELP:OM:MODAL] START */}
+{/* [HELP:OM:MODAL] START */}
       {showBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 sm:p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Book prøvetræning</h2>
-                <p className="text-xs text-gray-600">
+                <p className="mt-1 text-sm text-slate-600">
                   Vi bekræfter tidspunktet, når lokaler og træningshold er helt
                   fastlagt.
                 </p>
               </div>
               <button
                 type="button"
-                className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50"
                 onClick={closeBooking}
+                className="text-sm text-slate-500 hover:text-slate-800"
               >
                 Luk
               </button>
@@ -977,6 +982,7 @@ export default function OmPage() {
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  placeholder="Dit navn"
                 />
               </div>
               <div>
@@ -985,6 +991,8 @@ export default function OmPage() {
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="din@mail.dk"
+                  type="email"
                 />
               </div>
               <div>
@@ -993,45 +1001,44 @@ export default function OmPage() {
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  placeholder="12 34 56 78"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium">Dato</label>
-                <input
-                  type="date"
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                <label className="text-xs font-medium">
+                  Ønsket træningsdag
+                </label>
+                <select
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm bg-white"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                />
+                >
+                  <option value="">Vælg træningsdag</option>
+                  {tryoutDayLabels.map((label, i) => (
+                    <option key={`${label}-${i}`} value={label}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label className="text-xs font-medium">Tidspunkt</label>
-                <input
-                  type="time"
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs font-medium">
-                  Bemærkning (valgfri)
-                </label>
-                <textarea
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                  rows={3}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="text-xs font-medium">Bemærkning (valgfri)</label>
+              <textarea
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm min-h-[72px]"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Fortæl kort om dig selv, erfaring, og hvad du ønsker af prøvetræningen..."
+              />
             </div>
 
             {msg && (
               <div
-                className={`mt-4 rounded-xl border px-3 py-2 text-sm ${
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
                   success
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : "border-amber-200 bg-amber-50 text-amber-900"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-amber-300 bg-amber-50 text-amber-800"
                 }`}
               >
                 {msg}
@@ -1042,7 +1049,7 @@ export default function OmPage() {
               <button
                 type="button"
                 onClick={closeBooking}
-                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+                className="rounded-xl border px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
                 Annuller
               </button>
@@ -1050,7 +1057,7 @@ export default function OmPage() {
                 type="button"
                 onClick={submitBooking}
                 disabled={busy}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
               >
                 {busy ? "Sender..." : "Send booking"}
               </button>
@@ -1058,7 +1065,10 @@ export default function OmPage() {
           </div>
         </div>
       )}
-      {/* [HELP:OM:MODAL] END */}
+{/* [HELP:OM:MODAL] END */}
+
+
+
     </main>
   );
 }

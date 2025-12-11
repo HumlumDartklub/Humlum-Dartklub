@@ -11,6 +11,8 @@ type NewsItem = {
   image?: string;
   date?: string | null;
   url?: string;
+  label?: string;
+  body?: string;
 };
 
 function isTruthyYes(value: any): boolean {
@@ -20,7 +22,6 @@ function isTruthyYes(value: any): boolean {
 
 export async function GET() {
   const base = process.env.NEXT_PUBLIC_SHEET_API;
-  // Brug samme nøgle som admin – kan sættes i .env.local, ellers falder vi tilbage.
   const key =
     process.env.NEXT_PUBLIC_SHEET_KEY ||
     process.env.ADMIN_SHEET_KEY ||
@@ -28,12 +29,11 @@ export async function GET() {
 
   if (!base) {
     return NextResponse.json(
-      { ok: false, error: "NEXT_PUBLIC_SHEET_API er ikke sat i .env.local" },
+      { ok: false, error: "NEXT_PUBLIC_SHEET_API mangler i miljøet" },
       { status: 500 }
     );
   }
 
-  // Byg URL til Apps Script Web App: ?tab=NYHEDER&key=...
   const url = new URL(base);
   url.searchParams.set("tab", "NYHEDER");
   if (key) {
@@ -59,9 +59,11 @@ export async function GET() {
 
     raw = await res.json();
   } catch (err: any) {
-    console.error("GET /api/news – fetch error", err);
     return NextResponse.json(
-      { ok: false, error: "Kunne ikke hente NYHEDER fra Sheet" },
+      {
+        ok: false,
+        error: `Kunne ikke hente NYHEDER: ${err?.message || String(err)}`,
+      },
       { status: 500 }
     );
   }
@@ -72,10 +74,8 @@ export async function GET() {
     ? raw
     : [];
 
-  // Map rækker fra NYHEDER → format til forsiden
   const items: NewsItem[] = rows
     .filter((row) => {
-      // Synlighed: hvis der er et 'visible'-felt, brug det. Hvis ikke, vis den.
       const visible = row.visible;
       if (visible === undefined || visible === null || visible === "") {
         return true;
@@ -111,7 +111,23 @@ export async function GET() {
       }
 
       const url =
-        row.url || row.link || row.href || row.slug || row.target_url || "";
+        row.link_url ||
+        row.url ||
+        row.link ||
+        row.href ||
+        row.slug ||
+        row.target_url ||
+        "";
+
+      const label =
+        row.link_label || row.cta_label || row.button_label || "";
+
+      const body =
+        row.body_md ||
+        row.body ||
+        row.text ||
+        row.description ||
+        "";
 
       return {
         title: String(title || "").trim(),
@@ -119,11 +135,12 @@ export async function GET() {
         image: image ? String(image) : "",
         date,
         url: url ? String(url) : "",
+        label: label ? String(label) : "",
+        body: body ? String(body) : "",
       };
     })
-    .filter((item) => item.title); // smid tomme væk
+    .filter((item) => item.title);
 
-  // Sortér nyheder (nyeste først, hvis der er dato)
   items.sort((a, b) => {
     const at = a.date ? Date.parse(a.date) : 0;
     const bt = b.date ? Date.parse(b.date) : 0;

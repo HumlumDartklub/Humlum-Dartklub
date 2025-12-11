@@ -1,16 +1,15 @@
 "use client";
 
-/* [HELP:PAY:IMPORTS] START */
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-/* [HELP:PAY:IMPORTS] END */
 
 type Method = "MobilePay" | "Kontant" | "Bankoverførsel";
 
 type FamilyMember = {
   firstName: string;
   lastName: string;
-  birthYear: string;
+  birthYear?: string;
+  birthDate?: string;
   isPrimary?: boolean;
 };
 
@@ -23,7 +22,8 @@ export default function BetalingPage() {
   const [done, setDone] = useState(false);
 
   const [method, setMethod] = useState<Method>("MobilePay");
-  const [paymentsPerYear, setPaymentsPerYear] = useState(1);
+  // Standard: kvartalsvis betaling (4x/år)
+  const [paymentsPerYear, setPaymentsPerYear] = useState(4);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("HDK_JOIN_DRAFT");
@@ -39,28 +39,55 @@ export default function BetalingPage() {
     }
   }, []);
 
-  const totalPerYear = useMemo(() => {
-    const amount = Number(draft?.price_amount ?? 0);
-    return Number.isFinite(amount) ? amount : 0;
+  // Pris-info: tolker price_amount + price_unit fra MEDLEMSPAKKER
+  const priceInfo = useMemo(() => {
+    const rawAmount = Number(draft?.price_amount ?? 0);
+    const unitRaw = (draft as any)?.price_unit ?? "";
+    const unit = String(unitRaw).toLowerCase();
+
+    const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
+
+    // Hvis enheden indeholder "md" eller "måned" → beløbet er pr. måned
+    const isMonthly =
+      unit.includes("md") ||
+      unit.includes("måned");
+
+    const monthly = isMonthly ? amount : amount / 12;
+    const yearly = isMonthly ? amount * 12 : amount;
+
+    return {
+      monthlyPrice: Math.round(monthly * 100) / 100,
+      totalPerYear: Math.round(yearly * 100) / 100,
+    };
   }, [draft]);
 
+  const totalPerYear = priceInfo.totalPerYear;
+  const monthlyPrice = priceInfo.monthlyPrice;
+
+  // Beløb pr. betaling ud fra valgt frekvens (1x, 2x, 4x pr. år)
   const amountPerPayment = useMemo(() => {
     if (!paymentsPerYear || paymentsPerYear <= 0) return totalPerYear;
-    return Math.round((totalPerYear / paymentsPerYear) * 100) / 100;
-  }, [totalPerYear, paymentsPerYear]);
 
+    const monthsPerPayment = 12 / paymentsPerYear;
+    return Math.round(monthlyPrice * monthsPerPayment * 100) / 100;
+  }, [monthlyPrice, paymentsPerYear, totalPerYear]);
+
+  // Udtræk alle medlemmer (primær + familie)
   const allFamilyMembers: FamilyMember[] = useMemo(() => {
     if (!draft) return [];
 
     const anyDraft = draft as any;
 
     const primaryYear = String(anyDraft.birth_year ?? "").trim();
-    const primary = {
+    const primaryDate = String(anyDraft.birth_date ?? "").trim();
+
+    const primary: FamilyMember = {
       firstName: String(anyDraft.first_name ?? "").trim(),
       lastName: String(anyDraft.last_name ?? "").trim(),
-      birthYear: primaryYear,
+      birthYear: primaryYear || undefined,
+      birthDate: primaryDate || undefined,
       isPrimary: true,
-    } as FamilyMember;
+    };
 
     const list: FamilyMember[] = [primary];
 
@@ -72,11 +99,17 @@ export default function BetalingPage() {
       const firstName = String(m.first ?? m.first_name ?? "").trim();
       const lastName = String(m.last ?? m.last_name ?? "").trim();
       const birthYear = String(m.year ?? m.birth_year ?? "").trim();
+      const birthDate = String(m.birth_date ?? "").trim();
 
-      list.push({ firstName, lastName, birthYear });
+      list.push({
+        firstName,
+        lastName,
+        birthYear: birthYear || undefined,
+        birthDate: birthDate || undefined,
+      });
     }
 
-    return list.filter((m) => m.firstName || m.lastName || m.birthYear);
+    return list.filter((m) => m.firstName || m.lastName || m.birthYear || m.birthDate);
   }, [draft]);
 
   const householdCount = useMemo(() => {
@@ -85,6 +118,36 @@ export default function BetalingPage() {
     if (!Number.isNaN(raw) && raw > 0) return raw;
     return allFamilyMembers.length || 1;
   }, [draft, allFamilyMembers]);
+
+  // Pakke-indhold (tekst) hvis vi har noget med fra pakken
+  const packageLines: string[] = useMemo(() => {
+    if (!draft) return [];
+    const anyDraft = draft as any;
+
+    // Forsøg flere mulige felter
+    if (Array.isArray(anyDraft.package_lines)) {
+      return anyDraft.package_lines
+        .map((x: any) => String(x ?? "").trim())
+        .filter(Boolean);
+    }
+    if (Array.isArray(anyDraft.lines)) {
+      return anyDraft.lines
+        .map((x: any) => String(x ?? "").trim())
+        .filter(Boolean);
+    }
+
+    const body =
+      (anyDraft.package_body ??
+        anyDraft.package_description ??
+        anyDraft.body ??
+        "") as string;
+
+    if (!body) return [];
+    return String(body)
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, [draft]);
 
   /* SUBMIT */
   async function submit() {
@@ -122,7 +185,7 @@ export default function BetalingPage() {
         throw new Error(
           (data && (data.error || data.message)) ||
             text ||
-            `HTTP ${res.status}`
+            `HTTP ${res.status}`,
         );
       }
 
@@ -155,7 +218,36 @@ export default function BetalingPage() {
     );
   }
 
+  // Hvis draft mangler helt (fx refresh uden data)
+  if (!draft) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
+        <h1 className="section-title">Ingen tilmelding fundet</h1>
+        <p className="mt-3 text-sm text-slate-700">
+          Vi kunne ikke finde dine tilmeldingsdata. Start forfra via{" "}
+          <button
+            type="button"
+            onClick={() => router.push("/bliv-medlem")}
+            className="underline text-emerald-700"
+          >
+            Bliv medlem
+          </button>
+          .
+        </p>
+      </main>
+    );
+  }
+
   /* MAIN VIEW */
+  const d: any = draft;
+
+  const levelLabel =
+    d.level_title || d.level || d.level_id || d.niveau || "";
+
+  const genderLabel = d.gender || d.køn || "";
+
+  const dduId = d.ddu_id || d.ddu || "";
+
   return (
     <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
       {/* HEADER */}
@@ -181,37 +273,121 @@ export default function BetalingPage() {
           <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl border p-3">
               <div className="text-slate-500">Pakke</div>
-              <div className="font-semibold">{(draft as any)?.package_id}</div>
+              <div className="font-semibold">{d.package_id}</div>
+              {levelLabel && (
+                <div className="mt-1 text-xs text-slate-600">
+                  Niveau: {levelLabel}
+                </div>
+              )}
             </div>
             <div className="rounded-xl border p-3">
-              <div className="text-slate-500">Årligt kontingent</div>
-              <div className="font-semibold">{totalPerYear} DKK</div>
+              <div className="text-slate-500">Månedligt kontingent</div>
+              <div className="font-semibold">{monthlyPrice} DKK</div>
+              <div className="mt-1 text-xs text-slate-500">
+                I alt {totalPerYear} DKK pr. år
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border p-3">
+          {/* Pakke-indhold */}
+          {packageLines.length > 0 && (
+            <div className="mt-3 rounded-xl border p-3 text-sm">
+              <div className="text-slate-500 text-sm mb-1">
+                Hvad pakken indeholder
+              </div>
+              <ul className="list-disc pl-5 space-y-1">
+                {packageLines.map((line, idx) => (
+                  <li key={idx}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-4 rounded-xl border p-3 text-sm">
             <div className="text-slate-500 text-sm">Medlem(mer)</div>
-            <div className="mt-2 space-y-1 text-sm">
+            <div className="mt-2 space-y-2">
               {allFamilyMembers.length > 0 ? (
-                allFamilyMembers.map((m, idx) => (
-                  <div key={idx}>
-                    <span className="font-semibold">
-                      {m.firstName} {m.lastName}
-                    </span>
-                    {m.birthYear && ` — ${m.birthYear}`}
-                    {m.isPrimary && (
-                      <span className="ml-2 text-xs text-emerald-700">
-                        (Primær)
-                      </span>
-                    )}
-                  </div>
-                ))
+                allFamilyMembers.map((m, idx) => {
+                  const birthLabel =
+                    m.birthDate || m.birthYear || "";
+                  return (
+                    <div key={idx}>
+                      <div>
+                        <span className="font-semibold">
+                          {m.firstName} {m.lastName}
+                        </span>
+                        {m.isPrimary && (
+                          <span className="ml-2 text-xs text-emerald-700">
+                            (Primær)
+                          </span>
+                        )}
+                      </div>
+                      {birthLabel && (
+                        <div className="text-xs text-slate-600">
+                          Fødselsdato: {birthLabel}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <div>—</div>
               )}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
-              Husstand: {householdCount}
+
+            <div className="mt-3 grid gap-1 text-xs text-slate-600">
+              {(d.email || d.phone) && (
+                <div>
+                  <span className="font-semibold">Kontakt:</span>
+                  {d.email && (
+                    <div>
+                      E-mail: <span>{d.email}</span>
+                    </div>
+                  )}
+                  {d.phone && (
+                    <div>
+                      Telefon: <span>{d.phone}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(d.address || d.zip || d.postnr || d.city || d.by) && (
+                <div>
+                  <span className="font-semibold">Adresse:&nbsp;</span>
+                  <span>
+                    {d.address}
+                    {(d.zip || d.postnr || d.city || d.by) && ", "}
+                    {d.zip || d.postnr} {d.city || d.by}
+                  </span>
+                </div>
+              )}
+
+              {genderLabel && (
+                <div>
+                  <span className="font-semibold">Køn:&nbsp;</span>
+                  <span>{genderLabel}</span>
+                </div>
+              )}
+
+              {dduId && (
+                <div>
+                  <span className="font-semibold">DDU ID:&nbsp;</span>
+                  <span>{dduId}</span>
+                </div>
+              )}
+
+              {d.remark && (
+                <div>
+                  <span className="font-semibold">Bemærkning:&nbsp;</span>
+                  <span>{d.remark}</span>
+                </div>
+              )}
+
+              <div>
+                <span className="font-semibold">Husstand:&nbsp;</span>
+                <span>{householdCount}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -221,10 +397,9 @@ export default function BetalingPage() {
           <div className="kicker">
             <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
           </div>
-          <h2 className="text-lg font-semibold">
-            Vælg betalingsønsker
-          </h2>
+          <h2 className="text-lg font-semibold">Vælg betalingsønsker</h2>
 
+          {/* Metode */}
           <div className="mt-3 rounded-xl border p-3">
             <div className="text-slate-500">Betalingsmetode</div>
             <div className="mt-2 flex flex-col gap-2">
@@ -242,11 +417,12 @@ export default function BetalingPage() {
                     />
                     <span>{m}</span>
                   </label>
-                )
+                ),
               )}
             </div>
           </div>
 
+          {/* Frekvens */}
           <div className="mt-3 rounded-xl border p-3">
             <div className="text-slate-500">Betalingsfrekvens</div>
             <div className="mt-2 grid grid-cols-3 gap-2">
@@ -275,6 +451,26 @@ export default function BetalingPage() {
                 <div className="text-slate-500">Årligt kontingent</div>
                 <div className="font-semibold">{totalPerYear} DKK</div>
               </div>
+            </div>
+
+            <div className="mt-2 text-xs text-slate-600">
+              {paymentsPerYear === 1 && (
+                <span>
+                  Du betaler hele beløbet én gang: {totalPerYear} DKK om året.
+                </span>
+              )}
+              {paymentsPerYear === 2 && (
+                <span>
+                  Du betaler {amountPerPayment} DKK to gange om året (hver 6.
+                  måned).
+                </span>
+              )}
+              {paymentsPerYear === 4 && (
+                <span>
+                  Du betaler {amountPerPayment} DKK fire gange om året (ca. hver
+                  3. måned).
+                </span>
+              )}
             </div>
           </div>
 

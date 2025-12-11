@@ -20,31 +20,16 @@ type Sponsor = {
 
 type Friend = {
   id: string;
-  label: string;
+  name: string;
+  note?: string;
+  order?: number;
 };
 /* [HELP:SPWALL:TYPES] END */
 
-/* [HELP:SPWALL:DATA] START — fallback hvis Sheet ikke kan læses */
-const FALLBACK_SPONSORS: Sponsor[] = [
-  { id: "s1", name: "[Sponsor · plads 1]", tier: "Guld", featured: true },
-  { id: "s2", name: "[Sponsor · plads 2]", tier: "Sølv", featured: true },
-  { id: "s3", name: "[Sponsor · plads 3]", tier: "Bronze", featured: true },
-  { id: "s4", name: "[Sponsor · plads 4]", tier: "Guld" },
-  { id: "s5", name: "[Sponsor · plads 5]", tier: "Sølv" },
-  { id: "s6", name: "[Sponsor · plads 6]", tier: "Bronze" },
-];
-
-const FALLBACK_FRIENDS: Friend[] = [
-  { id: "f1", label: "[Familien Jensen · plads]" },
-  { id: "f2", label: "[Mette & Morten · plads]" },
-  { id: "f3", label: "[Humlum Dart ven · plads]" },
-];
-
+/* [HELP:SPWALL:DATA] START — defaults + helpers */
 const ANONYMOUS_NOTE =
   "Nogle sponsorer og støtter vælger at bidrage anonymt – det respekterer vi selvfølgelig.";
-/* [HELP:SPWALL:DATA] END */
 
-/* [HELP:SPWALL:UTILS] START */
 function tierClasses(tier: SponsorTier) {
   switch (tier) {
     case "Guld":
@@ -72,17 +57,32 @@ function normalizeTier(v: any): SponsorTier {
     return "Sølv";
   return "Bronze";
 }
-/* [HELP:SPWALL:UTILS] END */
+/* [HELP:SPWALL:DATA] END */
 
 export default function SponsorWallPage() {
-  const [sponsors, setSponsors] = useState<Sponsor[]>(FALLBACK_SPONSORS);
-  const [friends] = useState<Friend[]>(FALLBACK_FRIENDS);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [sponsorsLoading, setSponsorsLoading] = useState(true);
 
-  /* [HELP:SPWALL:EFFECTS:LOAD] START — load SPONSORER fra Sheet */
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+
+  const [wallTexts, setWallTexts] = useState<Record<string, string>>({});
+  const [textsLoaded, setTextsLoaded] = useState(false);
+
+  const t = (key: string, fallback: string) => {
+    // Vis intet, mens vi henter teksterne første gang
+    if (!textsLoaded && Object.keys(wallTexts).length === 0) {
+      return "";
+    }
+    return wallTexts[key]?.trim() || fallback;
+  };
+
+  /* [HELP:SPWALL:EFFECTS:SPONSORS] START — load SPONSORER fra Sheet */
   useEffect(() => {
     let alive = true;
 
     (async () => {
+      setSponsorsLoading(true);
       try {
         const res = await fetch("/api/sheet?tab=SPONSORER&limit=500", {
           cache: "no-store",
@@ -94,34 +94,33 @@ export default function SponsorWallPage() {
           .filter(Boolean)
           .filter((r: any) => {
             const vis = String(r.visible ?? "").trim();
-            return !vis || isYes(vis);
+            if (!vis) return true;
+            return isYes(vis);
           })
           .map((r: any, idx: number) => {
             const id = String(r.id ?? "").trim() || `sp-${idx}`;
             const name = String(r.name ?? r.title ?? "").trim() || "Sponsor";
             const tier = normalizeTier(r.level ?? r.tier);
-
             const url =
               String(r.website ?? r.url ?? "").trim() || undefined;
-
             const logoUrl =
               String(r.logo_url ?? r.logoUrl ?? "").trim() || undefined;
-
-            const featured =
-              isYes(r.featured) || isYes(r.pin);
-
+            const featured = isYes(r.featured) || isYes(r.pin);
             const order = toNum(r.order, 9999);
-
             return { id, name, tier, url, logoUrl, featured, order };
           })
-          .sort((a: Sponsor, b: Sponsor) => (a.order ?? 9999) - (b.order ?? 9999));
-
+          .sort(
+            (a: Sponsor, b: Sponsor) =>
+              (a.order ?? 9999) - (b.order ?? 9999)
+          );
 
         if (!alive) return;
-        setSponsors(mapped.length ? mapped : FALLBACK_SPONSORS);
+        setSponsors(mapped);
       } catch {
         if (!alive) return;
-        setSponsors(FALLBACK_SPONSORS);
+        setSponsors([]);
+      } finally {
+        if (alive) setSponsorsLoading(false);
       }
     })();
 
@@ -129,18 +128,135 @@ export default function SponsorWallPage() {
       alive = false;
     };
   }, []);
-  /* [HELP:SPWALL:EFFECTS:LOAD] END */
+  /* [HELP:SPWALL:EFFECTS:SPONSORS] END */
+
+  /* [HELP:SPWALL:EFFECTS:FRIENDS] START — load VENNER fra Sheet */
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      setFriendsLoading(true);
+      try {
+        const res = await fetch("/api/sheet?tab=VENNER&limit=500", {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => null);
+        const rows = Array.isArray(data?.items) ? data.items : [];
+
+        const mapped: Friend[] = (rows || [])
+          .filter(Boolean)
+          .map((r: any, idx: number) => {
+            const name = String(
+              r.name ?? r.label ?? r.title ?? ""
+            ).trim();
+            if (!name) return null;
+
+            const note = String(r.note ?? r.comment ?? "")
+              .trim()
+              .replace(/\s+/g, " ");
+            const order = toNum(r.order, 9999);
+            const id = String(r.id ?? "").trim() || `friend-${idx}`;
+
+            const visibleRaw = String(r.visible ?? "").trim();
+            const visible = !visibleRaw || isYes(visibleRaw);
+            if (!visible) return null;
+
+            return {
+              id,
+              name,
+              note: note || undefined,
+              order,
+            };
+          })
+          .filter((f: Friend | null): f is Friend => !!f)
+          .sort(
+            (a: Friend, b: Friend) =>
+              (a.order ?? 9999) - (b.order ?? 9999)
+          );
+
+        if (!alive) return;
+        setFriends(mapped);
+      } catch {
+        if (!alive) return;
+        setFriends([]);
+      } finally {
+        if (alive) setFriendsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+  /* [HELP:SPWALL:EFFECTS:FRIENDS] END */
+
+  /* [HELP:SPWALL:EFFECTS:TEXTS] START — load SPONSORVAEG_TEKST */
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          "/api/sheet?tab=SPONSORVAEG_TEKST&limit=100",
+          { cache: "no-store" }
+        );
+        const data = await res.json().catch(() => null);
+        const rows = Array.isArray(data?.items) ? data.items : [];
+
+        const map: Record<string, string> = {};
+        for (const r of rows || []) {
+          if (!r) continue;
+          const key = String(r.key ?? r.id ?? "").trim();
+          const text = String(
+            r.text ?? r.value ?? r.body ?? ""
+          ).trim();
+          if (!key || !text) continue;
+          map[key] = text;
+        }
+
+        if (!alive) return;
+        setWallTexts(map);
+      } catch {
+        if (!alive) return;
+        setWallTexts({});
+      } finally {
+        if (alive) setTextsLoaded(true);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+  /* [HELP:SPWALL:EFFECTS:TEXTS] END */
 
   const featuredList = useMemo(
     () => sponsors.filter((s) => s.featured),
     [sponsors]
   );
-
   const mainFeatured = featuredList[0] ?? sponsors[0];
   const extraFeatured = featuredList.slice(1);
 
   const [showAllSponsors, setShowAllSponsors] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+
+  const featuredTitle = sponsorsLoading
+    ? "Henter sponsorer…"
+    : mainFeatured
+    ? mainFeatured.name
+    : "Ingen sponsorer registreret endnu";
+
+  const sponsorsCountLabel = sponsorsLoading
+    ? "henter…"
+    : `${sponsors.length || 0} pladser`;
+
+  const friendsCountLabel = friendsLoading
+    ? "henter…"
+    : friends.length === 0
+    ? "ingen registreret endnu"
+    : friends.length === 1
+    ? "1 ven"
+    : `${friends.length} venner`;
 
   /* [HELP:SPWALL:RENDER] START */
   return (
@@ -158,14 +274,14 @@ export default function SponsorWallPage() {
           </h1>
 
           <p className="mt-2 text-xs text-gray-700 sm:text-sm">
-            En hurtig og overskuelig visning af dem, der bakker Humlum Dartklub
-            op – både virksomheder og private.
+            En hurtig og overskuelig visning af dem, der bakker Humlum
+            Dartklub op – både virksomheder og private.
           </p>
         </div>
       </header>
       {/* [HELP:SPWALL:HEADER] END */}
 
-      {/* [HELP:SPWALL:FEATURED] START — “nyheds-agtigt” hero-kort */}
+      {/* [HELP:SPWALL:FEATURED] START — hero-kort */}
       <section className="mb-8">
         <div className="rounded-3xl border border-lime-300 bg-white p-5 shadow-sm md:flex md:items-stretch md:gap-5">
           <div className="flex flex-1 flex-col">
@@ -177,13 +293,14 @@ export default function SponsorWallPage() {
             </div>
 
             <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">
-              {mainFeatured?.name || "Fremhævet sponsor · plads"}
+              {featuredTitle}
             </h2>
 
             <p className="mt-2 text-xs text-gray-700 sm:text-sm">
-              Her kan vi fremhæve én eller flere sponsorer – fx sæsonpartnere
-              eller støtte til et særligt event. Logo og link styres via
-              admin-arket.
+              {t(
+                "featured_intro",
+                "Her kan vi fremhæve én eller flere sponsorer – fx sæsonpartnere eller støtte til et særligt event. Logo og link styres via admin-arket."
+              )}
             </p>
 
             {extraFeatured.length > 0 && (
@@ -200,7 +317,7 @@ export default function SponsorWallPage() {
             )}
 
             <div className="mt-4 flex flex-wrap gap-3 text-xs">
-              {mainFeatured?.url && (
+              {mainFeatured?.url && !sponsorsLoading && (
                 <a
                   href={mainFeatured.url}
                   target="_blank"
@@ -225,7 +342,7 @@ export default function SponsorWallPage() {
                 mainFeatured?.tier || "Bronze"
               )}`}
             >
-              {mainFeatured?.logoUrl ? (
+              {mainFeatured?.logoUrl && !sponsorsLoading ? (
                 <img
                   src={mainFeatured.logoUrl}
                   alt={mainFeatured.name}
@@ -250,7 +367,7 @@ export default function SponsorWallPage() {
           <span>
             Se alle sponsorer{" "}
             <span className="text-[10px] text-gray-500">
-              ({sponsors.length} pladser)
+              ({sponsorsCountLabel})
             </span>
           </span>
           <span className="text-[11px] text-gray-600">
@@ -260,6 +377,12 @@ export default function SponsorWallPage() {
 
         {showAllSponsors && (
           <div className="mt-4 space-y-2">
+            {sponsors.length === 0 && !sponsorsLoading && (
+              <div className="rounded-2xl border border-lime-200 bg-white p-3 text-[11px] text-gray-700 shadow-sm">
+                Der er endnu ikke registreret nogen sponsorer. Vi opdaterer
+                siden, så snart de første aftaler er på plads.
+              </div>
+            )}
             {sponsors.map((s) => (
               <SponsorListItem key={s.id} sponsor={s} />
             ))}
@@ -278,7 +401,7 @@ export default function SponsorWallPage() {
           <span>
             Se venner af Humlum Dartklub{" "}
             <span className="text-[10px] text-sky-700">
-              ({friends.length} eksempler)
+              ({friendsCountLabel})
             </span>
           </span>
           <span className="text-[11px] text-sky-700">
@@ -292,24 +415,36 @@ export default function SponsorWallPage() {
               Venner af Humlum Dartklub
             </h2>
             <p className="mt-1 text-xs text-sky-900/80">
-              Private støtter, familier og dartvenner uden virksomhed eller
-              logo. Navne vises kun, hvis man har sagt ja til det.
+              {t(
+                "friends_intro",
+                "Private støtter, familier og dartvenner uden virksomhed eller logo. Navne vises kun, hvis man har sagt ja til det."
+              )}
             </p>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
-              {friends.map((f) => (
-                <div
-                  key={f.id}
-                  className="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-2 text-sky-900 shadow-sm"
-                >
-                  {f.label}
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-3 text-[11px] text-sky-900/70">
-              Når du vil, laver vi en dedikeret Sheet-fane til VENNER.
-            </p>
+            {friends.length > 0 ? (
+              <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
+                {friends.map((f) => (
+                  <div
+                    key={f.id}
+                    className="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-2 text-sky-900 shadow-sm"
+                  >
+                    <span className="font-medium">{f.name}</span>
+                    {f.note && (
+                      <span className="ml-1 text-[10px] text-sky-700">
+                        – {f.note}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              !friendsLoading && (
+                <p className="mt-3 text-[11px] text-sky-900/70">
+                  Der er endnu ikke registreret nogen venner i systemet. Vi
+                  opdaterer løbende, efterhånden som flere støtter klubben.
+                </p>
+              )
+            )}
           </div>
         )}
       </section>
@@ -320,15 +455,15 @@ export default function SponsorWallPage() {
         <h2 className="mb-1 text-sm font-semibold">
           Anonyme sponsorer og støtter
         </h2>
-        <p>{ANONYMOUS_NOTE}</p>
+        <p>{t("anonymous_intro", ANONYMOUS_NOTE)}</p>
       </section>
       {/* [HELP:SPWALL:ANON] END */}
 
-      {/* [HELP:SPWALL:PRIVACY+CTA] START — kun pakkelink, ingen mail-knap */}
+      {/* [HELP:SPWALL:PRIVACY+CTA] START — privatliv + call to action */}
       <section className="mt-2 text-xs text-gray-600">
         <p className="mb-3">
-          Visning af logo, navn og evt. link sker altid efter aftale og i tråd
-          med vores{" "}
+          Visning af logo, navn og evt. link sker altid efter aftale og i
+          tråd med vores{" "}
           <Link href="/privatliv" className="underline text-emerald-700">
             privatlivspolitik
           </Link>
@@ -337,7 +472,10 @@ export default function SponsorWallPage() {
 
         <div className="mt-2 flex flex-col gap-3 text-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="text-gray-700">
-            Vil du være sponsor eller støtte klubben?
+            {t(
+              "bottom_cta",
+              "Vil du være sponsor eller støtte klubben?"
+            )}
           </div>
           <Link
             href="/sponsor"
