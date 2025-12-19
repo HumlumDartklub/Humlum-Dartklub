@@ -172,7 +172,7 @@ export default function NyhederPage() {
             >
               <div className="flex items-center gap-2 text-xs text-white/60">
                 {n.pin && (
-                  <span className="rounded bg-lime-500/20 text-lime-300 px-2 py-0.5">
+                  <span className="rounded bg-orange-500/20 text-orange-400 px-2 py-0.5">
                     PIN
                   </span>
                 )}
@@ -191,7 +191,7 @@ export default function NyhederPage() {
                     href={n.linkUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-lg border border-lime-400/60 px-3 py-1 text-xs font-semibold text-lime-100 hover:bg-lime-500/10"
+                    className="inline-flex items-center rounded-lg border border-slate-200/60 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-orange-500/10"
                   >
                     {n.linkLabel || "Åbn"}
                   </a>

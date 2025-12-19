@@ -204,7 +204,7 @@ export default function BetalingPage() {
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
         <div className="section-header">
           <div className="kicker">
-            <span className="h-2 w-2 rounded-full bg-lime-500" /> Tilmelding
+            <span className="h-2 w-2 rounded-full bg-orange-500" /> Tilmelding
           </div>
         </div>
         <h1 className="section-title">Tak for din tilmelding!</h1>
@@ -228,7 +228,7 @@ export default function BetalingPage() {
           <button
             type="button"
             onClick={() => router.push("/bliv-medlem")}
-            className="underline text-emerald-700"
+            className="underline text-orange-700"
           >
             Bliv medlem
           </button>
@@ -253,7 +253,7 @@ export default function BetalingPage() {
       {/* HEADER */}
       <div className="section-header">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
+          <span className="h-2 w-2 rounded-full bg-orange-500" /> Betaling
         </div>
         <h1 className="section-title">
           Oplys ønsket betalingsmetode og frekvens
@@ -317,7 +317,7 @@ export default function BetalingPage() {
                           {m.firstName} {m.lastName}
                         </span>
                         {m.isPrimary && (
-                          <span className="ml-2 text-xs text-emerald-700">
+                          <span className="ml-2 text-xs text-orange-700">
                             (Primær)
                           </span>
                         )}
@@ -395,7 +395,7 @@ export default function BetalingPage() {
         {/* BETALINGSVALG */}
         <aside className="card">
           <div className="kicker">
-            <span className="h-2 w-2 rounded-full bg-lime-500" /> Betaling
+            <span className="h-2 w-2 rounded-full bg-orange-500" /> Betaling
           </div>
           <h2 className="text-lg font-semibold">Vælg betalingsønsker</h2>
 
@@ -433,8 +433,8 @@ export default function BetalingPage() {
                   onClick={() => setPaymentsPerYear(n)}
                   className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
                     paymentsPerYear === n
-                      ? "border-emerald-500 bg-emerald-50"
-                      : "hover:border-emerald-300"
+                      ? "border-slate-200 bg-orange-50"
+                      : "hover:border-orange-300"
                   }`}
                 >
                   {n}x / år

@@ -87,9 +87,9 @@ export default function TilmeldingPage() {
   if (ok) {
     return (
       <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="rounded-2xl border border-lime-300 bg-white p-6">
-          <div className="text-sm text-emerald-700 mb-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-lime-500 mr-2" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <div className="text-sm text-orange-700 mb-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-orange-500 mr-2" />
             Tilmelding
           </div>
           <h1 className="text-2xl font-bold">Tak for din indmeldelse</h1>
@@ -105,7 +105,7 @@ export default function TilmeldingPage() {
           ) : (
             <p className="mt-6 text-slate-700">Betal i klubben (kontant eller MobilePay i baren).</p>
           )}
-          <div className="mt-6"><a href="/bliv-medlem" className="text-emerald-700 underline">Tilbage til medlemsoversigt</a></div>
+          <div className="mt-6"><a href="/bliv-medlem" className="text-orange-700 underline">Tilbage til medlemsoversigt</a></div>
         </div>
       </main>
     );
@@ -113,9 +113,9 @@ export default function TilmeldingPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-      <div className="rounded-2xl border border-lime-300 bg-white p-6">
-        <div className="text-sm text-emerald-700 mb-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-lime-500 mr-2" />
+      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="text-sm text-orange-700 mb-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-orange-500 mr-2" />
           Tilmelding
         </div>
         <h1 className="text-3xl font-bold">Pakke: {pakke || "—"}</h1>
@@ -136,7 +136,7 @@ export default function TilmeldingPage() {
             {(["Mand","Kvinde","Andet"] as const).map(k => (
               <button key={k} type="button"
                 onClick={() => setF({ ...f, koen: k })}
-                className={`px-3 py-2 rounded-lg border ${f.koen===k ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-800 border-slate-300"}`}>
+                className={`px-3 py-2 rounded-lg border ${f.koen===k ? "bg-orange-600 text-white border-slate-200" : "bg-white text-slate-800 border-slate-300"}`}>
                 {k}
               </button>
             ))}

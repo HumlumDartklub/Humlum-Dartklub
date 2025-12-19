@@ -1,52 +1,91 @@
-/* app/globals.css — Tailwind v4 kompatibel, Klub Tema v1 */
+/* app/globals.css — Tailwind v4 kompatibel, HDK Premium (public + portal feel) */
 
 @import "tailwindcss";
 
-/* Farver */
+/* ===== HDK PREMIUM TOKENS ===== */
 :root{
-  --brand-lime-50:#f1fee8;
-  --brand-lime-300:#86efac;
-  --brand-lime-400:#22c55e;
-  --brand-lime-500:#16a34a;
+  /* Base (dyrt og roligt) */
+  --ink-900:#0f172a;
+  --bg:#fbfbfc;
+  --fg:#0f172a;
 
-  /* PRIMÆR KNAP (MØRKEGRØN + HVID TEKST) */
-  --btn-bg:#166534;
-  --btn-bg-hover:#14532d;
-  --btn-border:#14532d;
+  /* Borders / surfaces */
+  --border:rgba(15,23,42,0.10);
+  --surface:#ffffff;
+  --surface-glass:rgba(255,255,255,0.82);
+
+  /* Brand accents (club colors) */
+  --hdk-orange:#f97316;      /* orange-500 */
+  --hdk-orange-700:#c2410c;  /* orange-700 */
+  --hdk-blue:#2563eb;        /* blue-600 */
+  --hdk-blue-700:#1d4ed8;    /* blue-700 */
+
+  /* Soft accent fog */
+  --hdk-orange-soft:rgba(249,115,22,0.18);
+  --hdk-blue-soft:rgba(37,99,235,0.14);
+
+  /* Primary button (CTA) */
+  /* [HELP:CSS:BTN:GRADIENT] START */
+  --btn-bg:linear-gradient(90deg, var(--hdk-orange) 0%, #ffb24a 40%, var(--hdk-blue) 100%);
+  --btn-bg-hover:linear-gradient(90deg, var(--hdk-orange-700) 0%, #ffb24a 40%, var(--hdk-blue-700) 100%);
+  --btn-border:rgba(15,23,42,0.10);
   --btn-text:#ffffff;
 
-  --ink-900:#111827;
-  --bg:#f9fafb;
-  --fg:#111827;
-  --border:#e5e7eb;
+  /* Soft variant (same look, just a touch calmer) */
+  --btn-bg-soft:linear-gradient(90deg, rgba(249,115,22,0.86) 0%, rgba(255,178,74,0.82) 40%, rgba(37,99,235,0.86) 100%);
+  --btn-bg-soft-hover:linear-gradient(90deg, rgba(194,65,12,0.92) 0%, rgba(255,178,74,0.86) 40%, rgba(29,78,216,0.92) 100%);
+  /* [HELP:CSS:BTN:GRADIENT] END */
 }
 
 /* Basis */
-html,body{ color:var(--ink-900); background:var(--bg); }
+:root, html, body{ color-scheme: light; }
+html,body{ color:var(--fg); background-color:var(--bg); }
+
+body{
+  /* Orange/blå premium fade – skal kunne ses, men ikke skrige */
+  background-image:
+    radial-gradient(900px circle at 16% 8%, var(--hdk-orange-soft), transparent 62%),
+    radial-gradient(900px circle at 84% 0%, var(--hdk-blue-soft), transparent 62%),
+    radial-gradient(1000px circle at 55% 100%, rgba(249,115,22,0.06), transparent 65%);
+  background-attachment: fixed;
+}
+
 a{ text-underline-offset:4px; transition:opacity .2s ease; }
-a:hover{ opacity:.8; }
+a:hover{ opacity:.86; }
 
-/* Ingen globale nav-hacks – navbar styres i komponenten */
-
+/* ==============================
+   Shared components (klasser brugt på mange sider)
+   ============================== */
 @layer components{
-  /* ---------- HERO (til forsiden) ---------- */
+  /* ---------- HERO ---------- */
   .hdk-hero{
     position: relative;
     overflow: hidden;
-    border-radius: 1.5rem;           /* rounded-3xl */
+    border-radius: 1.5rem;
     background-position: center;
     background-size: cover;
     background-repeat: no-repeat;
-    min-height: 420px;               /* samme højde som før */
+    min-height: 420px;
   }
+  /* ---------- HOME HERO (kun forsiden) ---------- */
+  .hdk-home-hero{
+    min-height: 340px;
+  }
+  @media (max-width: 640px){
+    .hdk-home-hero{
+      min-height: 280px;
+    }
+  }
+
   .hdk-hero::after{
     content: "";
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.25));
+    /* mørk overlay så teksten altid læses */
+    background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,.22));
   }
   .hdk-hero-inner{
     position: relative; z-index: 1;
-    padding: 3.5rem 1.5rem;          /* py-14 px-6 */
+    padding: 3.5rem 1.5rem;
     color: #fff;
   }
   .hdk-hero-title{ text-shadow: 0 1px 12px rgba(0,0,0,.45); }
@@ -54,28 +93,62 @@ a:hover{ opacity:.8; }
 
   /* ---------- Sektion-overskrifter ---------- */
   .section-header{
-    @apply rounded-3xl border border-lime-400 bg-white p-6 shadow-md;
+    @apply relative rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-6 shadow-sm;
   }
+  .section-header::before{
+    content:"";
+    position:absolute;
+    left:18px; right:18px; top:14px;
+    height:2px;
+    border-radius:999px;
+    background: linear-gradient(90deg, rgba(249,115,22,0.55), rgba(37,99,235,0.35), transparent);
+    opacity: .95;
+  }
+
   .kicker{
-    @apply inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs text-black;
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs text-slate-800;
   }
-  .section-title{ @apply mt-3 text-3xl font-bold text-gray-900; }
-  .section-subtitle{ @apply mt-2 text-gray-600 text-sm; }
-  .section-underline{ @apply mt-1 h-1 w-24 rounded-full bg-lime-400; }
+  .section-title{ @apply mt-3 text-3xl font-bold text-slate-900; }
+  .section-subtitle{ @apply mt-2 text-slate-600 text-sm; }
+  .section-underline{
+    @apply mt-1 h-1 w-24 rounded-full;
+    background: linear-gradient(90deg, rgba(249,115,22,0.90), rgba(37,99,235,0.55));
+  }
 
   /* ---------- Kort & grids ---------- */
   .card{
-    @apply h-full flex flex-col rounded-3xl border border-lime-400 bg-white p-6
-           shadow-md hover:shadow-lg hover:-translate-y-0.5 transition;
+    /* Mere gennemsigtig så watermark/fade kan “spille igennem” */
+    @apply relative h-full flex flex-col rounded-3xl border border-slate-200 bg-white/55 backdrop-blur p-6
+           shadow-sm hover:shadow-md hover:-translate-y-0.5 transition;
+  }
+
+  .card::before{
+    content:"";
+    position:absolute;
+    left:18px; right:18px; top:14px;
+    height:2px;
+    border-radius:999px;
+    background: linear-gradient(90deg, rgba(249,115,22,0.45), rgba(37,99,235,0.25), transparent);
+    opacity: .9;
   }
   .card-grid{ @apply grid gap-6 items-stretch; }
 
-  /* Chips */
+  /* ---------- Fold-ud bar (forside) ---------- */
+  /* [HELP:CSS:DETAILS] START */
+  .details-summary{
+    @apply flex cursor-pointer list-none items-start justify-between gap-4;
+  }
+  .details-summary::-webkit-details-marker{ display:none; }
+
+  .details-chevron{ @apply mt-1 text-slate-500 transition-transform; }
+  details[open] .details-chevron{ @apply rotate-180; }
+  /* [HELP:CSS:DETAILS] END */
+
   .chip{
-    @apply rounded-full border border-lime-300/60 bg-lime-50 px-2.5 py-0.5 text-xs text-black;
+    @apply rounded-full border border-slate-200 bg-white/70 px-2.5 py-0.5 text-xs text-slate-700;
   }
 
-  /* ---------- Knapper (MØRKEGRØN + HVID TEKST) ---------- */
+  /* ---------- Knapper ---------- */
   .btn{
     @apply inline-flex items-center justify-center gap-2 font-semibold transition shadow-sm;
   }
@@ -86,20 +159,54 @@ a:hover{ opacity:.8; }
     color: var(--btn-text);
     border: 1px solid var(--btn-border);
   }
+
+  /* [HELP:CSS:BTN:SOFT] START — mindre “premium” (stadig gradient, bare roligere) */
+  .btn-primary-soft{
+    background: var(--btn-bg-soft);
+  }
+  .btn-primary-soft:hover{
+    background: var(--btn-bg-soft-hover);
+  }
+  /* [HELP:CSS:BTN:SOFT] END */
+
   .btn-primary:hover{ background: var(--btn-bg-hover); }
 
   .btn-secondary{
-    @apply rounded-xl px-4 py-2 text-black hover:opacity-80;
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.9rem;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 1px solid var(--btn-border);
   }
+  .btn-secondary:hover{ background: var(--btn-bg-hover); }
+
+  /* [HELP:CSS:BTN:LEGACY_FORCE] START
+     Tving gamle hardcodede CTA-klasser til HDK-gradient, så alt bliver ens.
+     (Rammer kun klikbare elementer — ikke badges/chips) */
+  a.bg-orange-600, button.bg-orange-600, input.bg-orange-600,
+  a.bg-orange-500, button.bg-orange-500, input.bg-orange-500,
+  a.bg-orange-400, button.bg-orange-400, input.bg-orange-400,
+  a.bg-black,      button.bg-black,      input.bg-black{
+    background: var(--btn-bg) !important;
+    color: var(--btn-text) !important;
+    border-color: var(--btn-border) !important;
+  }
+  a.bg-orange-600:hover, button.bg-orange-600:hover, input.bg-orange-600:hover,
+  a.bg-orange-500:hover, button.bg-orange-500:hover, input.bg-orange-500:hover,
+  a.bg-orange-400:hover, button.bg-orange-400:hover, input.bg-orange-400:hover,
+  a.bg-black:hover,      button.bg-black:hover,      input.bg-black:hover{
+    background: var(--btn-bg-hover) !important;
+  }
+  /* [HELP:CSS:BTN:LEGACY_FORCE] END */
 
   /* ---------- Inputs ---------- */
   .input-light{
-    @apply rounded-xl border border-lime-300 bg-white px-3 py-2
-           text-gray-900 outline-none focus:ring-2 focus:ring-lime-300/60;
+    @apply rounded-xl border border-slate-200 bg-white/90 px-3 py-2
+           text-slate-900 outline-none focus:ring-2 focus:ring-orange-300/60;
   }
   .input-dark{
     @apply rounded-xl border border-white/10 bg-black/20 px-3 py-2
-           text-white outline-none focus:ring-2 focus:ring-lime-300/60;
+           text-white outline-none focus:ring-2 focus:ring-orange-300/60;
   }
 
   /* Hjælpere */
@@ -107,6 +214,7 @@ a:hover{ opacity:.8; }
   .chevron{ @apply transition-transform duration-300; }
   .chevron-open{ @apply rotate-180; }
 }
+
 /* --- helpers --- */
 .line-clamp-2{
   display:-webkit-box;
@@ -114,4 +222,3 @@ a:hover{ opacity:.8; }
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
-

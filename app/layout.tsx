@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import NavBar from "../components/NavBar";
-import LiveTicker from "../components/LiveTicker";
+import AppChrome from "./components/AppChrome";
 import DevAdminFab from "./components/DevAdminFab";
 
 export const metadata: Metadata = {
@@ -12,10 +11,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="da">
       <body>
-        <NavBar />
-        <LiveTicker />
-        {children}
-<DevAdminFab />
+        <AppChrome>{children}</AppChrome>
+        <DevAdminFab />
 
       </body>
     </html>

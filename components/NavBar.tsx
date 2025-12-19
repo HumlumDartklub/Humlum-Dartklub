@@ -11,15 +11,8 @@ export default function NavBar() {
   const [open, setOpen] = useState(false);
   /* [HELP:NAV:STATE] END */
 
-  /* [HELP:NAV:LABELS] START — små badges til WIP-sider */
-  const academyLabel = (
-    <span className="inline-flex items-center gap-2">
-      <span>Humlum Dart Academy</span>
-      <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
-        Kommer snart
-      </span>
-    </span>
-  );
+  /* [HELP:NAV:LABELS] START — labels (ingen WIP-badges på HP) */
+  const academyLabel = "Humlum Dart Academy";
   /* [HELP:NAV:LABELS] END */
 
   // [HELP:NAV:RENDER] START — header + nav
@@ -69,12 +62,11 @@ export default function NavBar() {
             Bestyrelseslogin
           </Link>
 
-          <Link
-            href="/bliv-medlem"
-            className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-1.5 text-white hover:opacity-90"
-          >
+          {/* [HELP:NAV:CTA:DESKTOP] START */}
+          <Link href="/bliv-medlem" className="btn btn-primary">
             Bliv medlem
           </Link>
+          {/* [HELP:NAV:CTA:DESKTOP] END */}
         </div>
         {/* [HELP:NAV:DESKTOP] END */}
 
@@ -100,10 +92,7 @@ export default function NavBar() {
       </nav>
 
       {/* [HELP:NAV:MOBILE:PANEL] START — mobil dropdown-panel */}
-      <div
-        id="mobile-menu"
-        className={`md:hidden ${open ? "block" : "hidden"}`}
-      >
+      <div id="mobile-menu" className={`md:hidden ${open ? "block" : "hidden"}`}>
         <div className="mx-auto max-w-7xl px-4 pb-3 sm:px-6 lg:px-8">
           <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
             <div className="flex flex-col divide-y">
@@ -114,6 +103,7 @@ export default function NavBar() {
               >
                 Forside
               </Link>
+
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
                 href="/om"
@@ -121,6 +111,7 @@ export default function NavBar() {
               >
                 Om klubben
               </Link>
+
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
                 href="/sponsor"
@@ -128,6 +119,7 @@ export default function NavBar() {
               >
                 Sponsor
               </Link>
+
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
                 href="/sponsorvaeg"
@@ -135,6 +127,7 @@ export default function NavBar() {
               >
                 Sponsorvæg
               </Link>
+
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
                 href="/events"
@@ -142,18 +135,15 @@ export default function NavBar() {
               >
                 Events
               </Link>
+
               <Link
                 className="px-4 py-3 hover:bg-gray-50"
                 href="/academy"
                 onClick={() => setOpen(false)}
               >
-                <span className="inline-flex items-center gap-2">
-                  <span>Humlum Dart Academy</span>
-                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
-                    Kommer snart
-                  </span>
-                </span>
+                {academyLabel}
               </Link>
+
               <Link
                 className="px-4 py-3 text-xs text-neutral-500 hover:bg-gray-50"
                 href="/admin/login"
@@ -161,13 +151,16 @@ export default function NavBar() {
               >
                 Bestyrelseslogin
               </Link>
+
+              {/* [HELP:NAV:CTA:MOBILE] START */}
               <Link
-                className="m-3 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-white hover:opacity-90"
+                className="m-3 w-full btn btn-primary justify-center"
                 href="/bliv-medlem"
                 onClick={() => setOpen(false)}
               >
                 Bliv medlem
               </Link>
+              {/* [HELP:NAV:CTA:MOBILE] END */}
             </div>
           </div>
         </div>

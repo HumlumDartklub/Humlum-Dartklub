@@ -66,7 +66,7 @@ export default function AdminLoginPage() {
         <button
           type="submit"
           disabled={busy}
-          className="mt-1 w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+          className="mt-1 w-full rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
         >
           {busy ? "Logger ind…" : "Log ind"}
         </button>

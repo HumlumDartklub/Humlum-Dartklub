@@ -231,11 +231,13 @@ export default function SponsorWallPage() {
   /* [HELP:SPWALL:EFFECTS:TEXTS] END */
 
   const featuredList = useMemo(
-    () => sponsors.filter((s) => s.featured),
-    [sponsors]
-  );
-  const mainFeatured = featuredList[0] ?? sponsors[0];
-  const extraFeatured = featuredList.slice(1);
+  () => sponsors.filter((s) => s.featured),
+  [sponsors]
+);
+
+// B: Sponsorvæg viser KUN 1 fremhævet sponsor (laveste order pga sorteringen)
+const mainFeatured = featuredList[0] ?? sponsors[0];
+
 
   const [showAllSponsors, setShowAllSponsors] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -263,9 +265,9 @@ export default function SponsorWallPage() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       {/* [HELP:SPWALL:HEADER] START — kort intro */}
       <header className="mb-6">
-        <div className="rounded-3xl border border-lime-300/60 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
-          <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-[11px]">
-            <span className="h-2 w-2 rounded-full bg-lime-500" />
+        <div className="rounded-3xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/60 bg-orange-50 px-3 py-1 text-[11px]">
+            <span className="h-2 w-2 rounded-full bg-orange-500" />
             SPONSORVÆG
           </div>
 
@@ -283,10 +285,10 @@ export default function SponsorWallPage() {
 
       {/* [HELP:SPWALL:FEATURED] START — hero-kort */}
       <section className="mb-8">
-        <div className="rounded-3xl border border-lime-300 bg-white p-5 shadow-sm md:flex md:items-stretch md:gap-5">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:flex md:items-stretch md:gap-5">
           <div className="flex flex-1 flex-col">
             <div className="mb-2 inline-flex items-center gap-2 text-[11px]">
-              <span className="h-2 w-2 rounded-full bg-lime-500" />
+              <span className="h-2 w-2 rounded-full bg-orange-500" />
               <span className="uppercase tracking-wide text-gray-700">
                 Fremhævet sponsor
               </span>
@@ -303,33 +305,21 @@ export default function SponsorWallPage() {
               )}
             </p>
 
-            {extraFeatured.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-600">
-                {extraFeatured.map((s) => (
-                  <span
-                    key={s.id}
-                    className="rounded-full border border-lime-200 bg-lime-50 px-2 py-1"
-                  >
-                    {s.name}
-                  </span>
-                ))}
-              </div>
-            )}
-
+           
             <div className="mt-4 flex flex-wrap gap-3 text-xs">
               {mainFeatured?.url && !sponsorsLoading && (
                 <a
                   href={mainFeatured.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
+                  className="inline-flex items-center rounded-xl bg-orange-600 px-4 py-2 font-semibold text-white hover:bg-orange-700"
                 >
                   Besøg sponsor
                 </a>
               )}
               <Link
                 href="/sponsor"
-                className="inline-flex items-center rounded-xl border border-emerald-500/70 bg-emerald-50 px-4 py-2 font-semibold text-emerald-800 hover:bg-emerald-100"
+                className="inline-flex items-center rounded-xl border border-slate-200/70 bg-orange-50 px-4 py-2 font-semibold text-orange-800 hover:bg-orange-50"
               >
                 Læs om sponsorpakker
               </Link>
@@ -362,7 +352,7 @@ export default function SponsorWallPage() {
         <button
           type="button"
           onClick={() => setShowAllSponsors((v) => !v)}
-          className="flex w-full items-center justify-between rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3 text-xs font-semibold text-gray-900 shadow-sm hover:bg-lime-100"
+          className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-orange-50 px-4 py-3 text-xs font-semibold text-gray-900 shadow-sm hover:bg-orange-50"
         >
           <span>
             Se alle sponsorer{" "}
@@ -378,7 +368,7 @@ export default function SponsorWallPage() {
         {showAllSponsors && (
           <div className="mt-4 space-y-2">
             {sponsors.length === 0 && !sponsorsLoading && (
-              <div className="rounded-2xl border border-lime-200 bg-white p-3 text-[11px] text-gray-700 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 text-[11px] text-gray-700 shadow-sm">
                 Der er endnu ikke registreret nogen sponsorer. Vi opdaterer
                 siden, så snart de første aftaler er på plads.
               </div>
@@ -451,7 +441,7 @@ export default function SponsorWallPage() {
       {/* [HELP:SPWALL:FRIENDS] END */}
 
       {/* [HELP:SPWALL:ANON] START — anonyme bidragydere */}
-      <section className="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5 text-xs text-emerald-900 shadow-sm">
+      <section className="mb-6 rounded-3xl border border-slate-200 bg-orange-50/70 p-5 text-xs text-orange-800 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold">
           Anonyme sponsorer og støtter
         </h2>
@@ -464,7 +454,7 @@ export default function SponsorWallPage() {
         <p className="mb-3">
           Visning af logo, navn og evt. link sker altid efter aftale og i
           tråd med vores{" "}
-          <Link href="/privatliv" className="underline text-emerald-700">
+          <Link href="/privatliv" className="underline text-orange-700">
             privatlivspolitik
           </Link>
           .
@@ -479,7 +469,7 @@ export default function SponsorWallPage() {
           </div>
           <Link
             href="/sponsor"
-            className="inline-flex items-center rounded-xl border border-emerald-500 bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
+            className="inline-flex items-center rounded-xl border border-slate-200 bg-orange-600 px-4 py-2 font-semibold text-white hover:bg-orange-700"
           >
             Læs om sponsorpakker
           </Link>
@@ -499,11 +489,11 @@ function SponsorListItem({ sponsor }: { sponsor: Sponsor }) {
       href={sponsor.url || "#"}
       target={sponsor.url ? "_blank" : undefined}
       rel={sponsor.url ? "noopener noreferrer" : undefined}
-      className={`flex items-center gap-3 rounded-2xl border bg-white p-3 text-xs text-gray-800 shadow-sm hover:border-emerald-400 hover:shadow-md ${tierClasses(
+      className={`flex items-center gap-3 rounded-2xl border bg-white p-3 text-xs text-gray-800 shadow-sm hover:border-orange-300 hover:shadow-md ${tierClasses(
         sponsor.tier
       )}`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-lime-300 bg-white text-[10px] text-gray-500 overflow-hidden">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-[10px] text-gray-500 overflow-hidden">
         {sponsor.logoUrl ? (
           <img
             src={sponsor.logoUrl}
@@ -518,7 +508,7 @@ function SponsorListItem({ sponsor }: { sponsor: Sponsor }) {
         <div className="text-sm font-semibold text-gray-900">
           {sponsor.name}
         </div>
-        <div className="mt-1 text-[10px] text-emerald-700 underline">
+        <div className="mt-1 text-[10px] text-orange-700 underline">
           {sponsor.url ? "Åbn sponsorens side" : "Link indsættes senere"}
         </div>
       </div>

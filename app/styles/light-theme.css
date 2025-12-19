@@ -5,10 +5,10 @@
   --surface:#ffffff;        /* kort/sektioner */
   --muted:#475569;          /* sekundær tekst */
   --border:#e5e7eb;         /* lyse kanter */
-  --accent:#16a34a;         /* grøn primær */
-  --accent-strong:#15803d;  /* hover-grøn */
-  --link:#0f9d58;           /* link-grøn */
-  --hero-grad:linear-gradient(180deg,#ecfeff,#ffffff 50%,#f0fdfa);
+  --accent:#f97316;         /* grøn primær */
+  --accent-strong:#c2410c;  /* hover-grøn */
+  --link:#1d4ed8;           /* link-grøn */
+  --hero-grad:linear-gradient(180deg, rgba(249,115,22,0.10), #ffffff 55%, rgba(37,99,235,0.08));
 }
 
 /* Tving lyst tema uanset OS-indstilling */
@@ -91,8 +91,8 @@ footer a{ color:#c7f9cc !important; } footer a:hover{ color:#86efac !important; 
 }
 
 /* Grønne borders på lys baggrund -> blød */
-[class*="border-emerald-6"]{ border-color: var(--border) !important; }
+[class*="border-orange-6"]{ border-color: var(--border) !important; }
 
 /* Gradients med emerald -> brug primær grøn */
-.from-emerald-600, .bg-emerald-600{ background-color: var(--accent) !important; }
-.hover\:bg-emerald-700:hover{ background-color: var(--accent-strong) !important; }
+.from-orange-600, .bg-orange-600{ background-color: var(--accent) !important; }
+.hover\:bg-orange-700:hover{ background-color: var(--accent-strong) !important; }

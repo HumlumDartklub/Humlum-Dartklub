@@ -1,5 +1,6 @@
 /* [HELP:API:IMPORTS] START */
 import { NextResponse } from "next/server";
+import { getMemberFromRequest, isAdminRequest } from "@/lib/memberAuth";
 /* [HELP:API:IMPORTS] END */
 
 /* [HELP:API:CONFIG:dynamic] START */
@@ -15,18 +16,42 @@ function getGasUrl(): string {
     process.env.SHEET_API_URL?.trim() ||
     process.env.NEXT_PUBLIC_SHEET_API?.trim() ||
     "";
-  if (!u) {
-    throw new Error(
-      "GAS Web App URL mangler. Sæt SHEET_API_URL eller NEXT_PUBLIC_SHEET_API i .env.local"
-    );
-  }
+  if (!u) throw new Error("Missing SHEET_API_URL / NEXT_PUBLIC_SHEET_API");
   return u;
 }
+
 function getAdminKey(): string | undefined {
-  const k = process.env.ADMIN_TOKEN?.trim();
+  // ADMIN_TOKEN = “nøgle” til GAS. Hvis ikke sat, bruger vi ADMIN_LOGIN_TOKEN.
+  const k =
+    process.env.ADMIN_TOKEN?.trim() ||
+    process.env.ADMIN_LOGIN_TOKEN?.trim();
   return k || undefined;
 }
+
+const PUBLIC_TABS = new Set<string>([
+  "KLUBINFO",
+  "TICKER",
+  "NYHEDER",
+  "EVENTS",
+  "HERO",
+  "MEDIA",
+  "OM_KLUBBEN",
+  "FORSIDE",
+  "MEDLEMSPAKKER",
+  "SPONSORPAKKER",
+  "SPONSOR_TILKOEB",
+  "SPONSOR_STOET",
+  "PROEVETRAENING",
+  "SPONSORER",
+  "VENNER",
+  "SPONSORVAEG_TEKST",
+  "BANESPONSOR_BANER",
+]);
 /* [HELP:API:UTIL:env] END */
+
+function normalizeTab(t: string): string {
+  return String(t || "").trim().toUpperCase();
+}
 
 /* [HELP:API:GET] START */
 export async function GET(req: Request) {
@@ -34,20 +59,50 @@ export async function GET(req: Request) {
     const gas = getGasUrl();
     const { searchParams } = new URL(req.url);
 
-    const tab = (searchParams.get("tab") || "").trim();
-    if (!tab) {
+    const tabRaw = (searchParams.get("tab") || "").trim();
+    if (!tabRaw) {
       return NextResponse.json(
         { ok: false, error: "tab is required" },
         { status: 400 }
       );
     }
 
-    // Sørg for at key sendes med (hvis ikke allerede angivet)
+    const tabKey = normalizeTab(tabRaw);
+    const isPublic = PUBLIC_TABS.has(tabKey);
+    const isAdmin = isAdminRequest(req);
+    const member = getMemberFromRequest(req);
+    const isMember = !!member;
+
+    // Fjern ALTID client-supplied key (så ingen kan snyde)
     const params = new URLSearchParams(searchParams);
-    if (!params.has("key")) {
+    params.delete("key");
+
+    // Kun disse må få server-injected key:
+    // - Admin: alle tabs
+    // - Member: kun MEDLEMSZONE
+    if (!isPublic) {
       const key = getAdminKey();
-      if (key) params.set("key", key);
+      if (!key) {
+        return NextResponse.json(
+          { ok: false, error: "Missing ADMIN_TOKEN/ADMIN_LOGIN_TOKEN (GAS key) on server" },
+          { status: 500 }
+        );
+      }
+
+      if (isAdmin) {
+        params.set("key", key);
+      } else if (isMember && tabKey === "MEDLEMSZONE") {
+        params.set("key", key);
+      } else {
+        return NextResponse.json(
+          { ok: false, error: "Unauthorized", tab: tabKey },
+          { status: 401 }
+        );
+      }
     }
+
+    // Sørg for original tab (case-insensitive i GAS, men vi sender raw)
+    params.set("tab", tabRaw);
 
     const target = `${gas}?${params.toString()}`;
     const res = await fetch(target, { method: "GET", cache: "no-store" });
@@ -73,6 +128,14 @@ export async function GET(req: Request) {
 /* [HELP:API:POST] START */
 export async function POST(req: Request) {
   try {
+    // POST er kun for admin-handlinger (updates/paid/reject osv.)
+    if (!isAdminRequest(req)) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const gas = getGasUrl();
     const body: any = await req.json().catch(() => ({}));
 
@@ -84,25 +147,32 @@ export async function POST(req: Request) {
       );
     }
 
+    const key = getAdminKey();
+    if (!key) {
+      return NextResponse.json(
+        { ok: false, error: "Missing ADMIN_TOKEN/ADMIN_LOGIN_TOKEN (GAS key) on server" },
+        { status: 500 }
+      );
+    }
+
     // Læs værdier fra body (og læg dem i query fordi Code.gs kigger i e.parameter)
-    const key    = String(body.key ?? getAdminKey() ?? "").trim() || undefined;
     const action = String(body.action ?? "").trim() || undefined;
     const row    = String(body.row ?? "").trim() || undefined;
     const method = String(body.method ?? "").trim() || undefined;
     const note   = String(body.note ?? "").trim() || undefined;
 
     const url = new URL(gas);
-    if (key)    url.searchParams.set("key", key);
+    url.searchParams.set("key", key);
     url.searchParams.set("tab", tab);
     if (action) url.searchParams.set("action", action);
     if (row)    url.searchParams.set("row", row);
     if (method) url.searchParams.set("method", method);
     if (note)   url.searchParams.set("note", note);
 
-    // Body kan indeholde ekstra data – GAS må ignorere dem, men vi sender dem med
     const res = await fetch(url.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
       body: JSON.stringify(body),
     });
 

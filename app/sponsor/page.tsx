@@ -626,7 +626,7 @@ export default function SponsorPage() {
       {/* [HELP:SPONSOR:SECTION:INTRO] START — sideintro (kicker, titel, undertekst) */}
       <section className="section-header">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           SPONSORER
         </div>
         <h1 className="section-title">Støt Humlum Dartklub</h1>
@@ -645,9 +645,9 @@ export default function SponsorPage() {
       {/* [HELP:SPONSOR:SECTION:INTRO] END */}
 
       {/* [HELP:SPONSOR:SECTION:PACKAGES] START — pakker + ét-klik støtte i samme grid */}
-      <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
+      <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           PAKKER &amp; ÉT-KLIK STØTTE
         </div>
 
@@ -659,8 +659,8 @@ export default function SponsorPage() {
                 key={p.key}
                 className={[
                   "h-full rounded-3xl border bg-white p-6 shadow-md transition",
-                  "border-lime-400 hover:shadow-lg hover:-translate-y-0.5",
-                  isSel ? "ring-2 ring-lime-400/70" : "",
+                  "border-slate-200 hover:shadow-lg hover:-translate-y-0.5",
+                  isSel ? "ring-2 ring-orange-300/70" : "",
                   "flex flex-col",
                 ].join(" ")}
               >
@@ -670,7 +670,7 @@ export default function SponsorPage() {
                     {p.name}
                   </h3>
                   {p.badge && (
-                    <span className="rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-xs text-gray-700">
+                    <span className="rounded-full border border-slate-200/60 bg-orange-50 px-2 py-0.5 text-xs text-gray-700">
                       {p.badge}
                     </span>
                   )}
@@ -708,8 +708,8 @@ export default function SponsorPage() {
           <div
             className={[
               "h-full text-left rounded-3xl border p-6 shadow-md transition",
-              "border-lime-400 hover:shadow-lg hover:-translate-y-0.5",
-              clickActive ? "ring-2 ring-lime-400/70" : "",
+              "border-slate-200 hover:shadow-lg hover:-translate-y-0.5",
+              clickActive ? "ring-2 ring-orange-300/70" : "",
               "bg-white flex flex-col",
             ].join(" ")}
           >
@@ -728,8 +728,8 @@ export default function SponsorPage() {
                   className={[
                     "rounded-full border px-3 py-1 text-sm",
                     q === clickAmount
-                      ? "border-lime-400 bg-lime-50"
-                      : "border-lime-200 bg-white hover:bg-lime-50",
+                      ? "border-slate-200 bg-orange-50"
+                      : "border-slate-200 bg-white hover:bg-orange-50",
                   ].join(" ")}
                   onClick={() => {
                     setClickAmount(q);
@@ -766,7 +766,7 @@ export default function SponsorPage() {
               </p>
             </div>
 
-            <details className="mt-3 rounded-xl border border-lime-300/60 bg-gray-50 p-3">
+            <details className="mt-3 rounded-xl border border-slate-200/60 bg-gray-50 p-3">
               <summary className="cursor-pointer text-sm">
                 Øremærkning (valgfrit)
               </summary>
@@ -839,9 +839,9 @@ export default function SponsorPage() {
       {/* [HELP:SPONSOR:SECTION:PACKAGES] END */}
 
       {/* [HELP:SPONSOR:SECTION:ADDONS] START — tilkøbsgrid */}
-      <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
+      <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           TILKØB
         </div>
 
@@ -854,8 +854,8 @@ export default function SponsorPage() {
                 key={a.key}
                 className={[
                   "h-full text-left rounded-3xl border p-4 shadow-md transition",
-                  "border-lime-400 hover:shadow-lg hover:-translate-y-0.5",
-                  active ? "ring-2 ring-lime-400/70" : "",
+                  "border-slate-200 hover:shadow-lg hover:-translate-y-0.5",
+                  active ? "ring-2 ring-orange-300/70" : "",
                   "bg-white flex flex-col",
                 ].join(" ")}
               >
@@ -874,7 +874,7 @@ export default function SponsorPage() {
                 )}
 
                 {isBane && (
-                  <div className="mt-3 rounded-2xl border border-lime-200 bg-lime-50/60 p-3">
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-orange-50/60 p-3">
                     <p className="text-xs font-semibold text-gray-800">
                       Ønsket bane
                     </p>
@@ -897,8 +897,8 @@ export default function SponsorPage() {
                               laneTaken
                                 ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through"
                                 : laneActive
-                                  ? "bg-lime-500 text-white border-lime-500"
-                                  : "bg-white text-gray-800 border-lime-300 hover:bg-lime-50",
+                                  ? "bg-orange-500 text-white border-slate-200"
+                                  : "bg-white text-gray-800 border-slate-200 hover:bg-orange-50",
                             ].join(" ")}
                           >
                             {`Bane ${lane}${laneTaken ? " (optaget)" : ""}`}
@@ -935,9 +935,9 @@ export default function SponsorPage() {
       {/* [HELP:SPONSOR:SECTION:ADDONS] END */}
 
       {/* [HELP:SPONSOR:SECTION:SUMMARY] START — opsummering & CTA */}
-      <section className="mt-8 rounded-3xl border border-lime-400 bg-white p-6 shadow-md">
+      <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           OPSUMMERING &amp; NÆSTE SKRIDT
         </div>
 
@@ -952,7 +952,7 @@ export default function SponsorPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl bg-lime-50 p-4 text-sm text-gray-900">
+            <div className="rounded-2xl bg-orange-50 p-4 text-sm text-gray-900">
               <p className="font-semibold">Økonomi (estimat)</p>
               <p className="mt-1">
                 Årligt samlet:{" "}

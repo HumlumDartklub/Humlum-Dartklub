@@ -4,9 +4,9 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
       {/* [HELP:PRIVACY:HEADER] START */}
-      <section className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+      <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="inline-flex items-center gap-2 text-sm">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           <span>Juridisk info</span>
         </div>
         <h1 className="mt-2 text-2xl font-extrabold">
@@ -24,7 +24,7 @@ export default function PrivacyPage() {
       {/* [HELP:PRIVACY:HEADER] END */}
 
       {/* [HELP:PRIVACY:TOC] START — lille indholdsfortegnelse */}
-      <nav className="mb-6 rounded-2xl border bg-white p-4 text-sm text-emerald-800">
+      <nav className="mb-6 rounded-2xl border bg-white p-4 text-sm text-orange-800">
         <div className="font-semibold mb-2">Indhold</div>
         <ol className="space-y-1 list-decimal list-inside">
           <li>
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
               E-mail:{" "}
               <a
                 href="mailto:humlumdartklub@gmail.com"
-                className="underline text-emerald-700"
+                className="underline text-orange-700"
               >
                 humlumdartklub@gmail.com
               </a>
@@ -438,7 +438,7 @@ export default function PrivacyPage() {
             Hvis du vil gøre brug af dine rettigheder, kan du kontakte os på{" "}
             <a
               href="mailto:humlumdartklub@gmail.com"
-              className="underline text-emerald-700"
+              className="underline text-orange-700"
             >
               humlumdartklub@gmail.com
             </a>
@@ -473,7 +473,7 @@ export default function PrivacyPage() {
                 href="https://www.datatilsynet.dk"
                 target="_blank"
                 rel="noreferrer"
-                className="underline text-emerald-700"
+                className="underline text-orange-700"
               >
                 www.datatilsynet.dk
               </a>
@@ -500,7 +500,7 @@ export default function PrivacyPage() {
         {/* 10. Kort opsummering */}
         <section
           id="kort"
-          className="rounded-2xl border bg-emerald-50 p-4 shadow-sm"
+          className="rounded-2xl border bg-orange-50 p-4 shadow-sm"
         >
           <h2 className="text-lg font-semibold mb-2">
             10. Kort og ærligt opsummeret
@@ -519,7 +519,7 @@ export default function PrivacyPage() {
             sige &quot;nej tak&quot; til bestemte ting. Skriv bare til os på{" "}
             <a
               href="mailto:humlumdartklub@gmail.com"
-              className="underline text-emerald-700"
+              className="underline text-orange-700"
             >
               humlumdartklub@gmail.com
             </a>

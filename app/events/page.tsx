@@ -4,6 +4,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+/* [HELP:FLAGS] START — skjul interne tips/pladsholdere i production */
+const SHOW_PLACEHOLDERS = process.env.NEXT_PUBLIC_SHOW_PLACEHOLDERS === "true";
+/* [HELP:FLAGS] END */
+
 /* [HELP:EVENTS:TYPES] START */
 type EventRow = {
   key?: string;
@@ -175,9 +179,9 @@ export default function EventsPage() {
     <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10">
       {/* [HELP:EVENTS:SECTION:HEADER] START — sideheader/beskrivelse */}
       <header className="mb-10">
-        <div className="rounded-3xl border border-lime-300/40 bg-white/60 backdrop-blur-sm p-6 shadow-sm">
-          <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/60 bg-lime-50 px-3 py-1 text-xs">
-            <span className="h-2 w-2 rounded-full bg-lime-500" />
+        <div className="rounded-3xl border border-slate-200/40 bg-white/60 backdrop-blur-sm p-6 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/60 bg-orange-50 px-3 py-1 text-xs">
+            <span className="h-2 w-2 rounded-full bg-orange-500" />
             🎯 EVENTS
           </div>
 
@@ -199,13 +203,13 @@ export default function EventsPage() {
           /* [HELP:EVENTS:CARD] START — enkelt event-kort */
           <article
             key={evt.id}
-            className="h-full flex flex-col rounded-3xl border border-lime-400 bg-white p-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
+            className="h-full flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
           >
             <div className="flex items-start justify-between">
               <p className="text-xs font-medium text-gray-600">
                 {evt.dateLabel || "Dato følger"}
               </p>
-              <span className="text-[10px] rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-gray-700">
+              <span className="text-[10px] rounded-full border border-slate-200/60 bg-orange-50 px-2 py-0.5 text-gray-700">
                 {evt.badge}
               </span>
             </div>
@@ -220,7 +224,7 @@ export default function EventsPage() {
                 {evt.tags.map((t, i) => (
                   <span
                     key={i}
-                    className="text-xs rounded-full border border-lime-300/60 bg-lime-50 px-2 py-0.5 text-gray-700"
+                    className="text-xs rounded-full border border-slate-200/60 bg-orange-50 px-2 py-0.5 text-gray-700"
                   >
                     {t}
                   </span>
@@ -236,7 +240,7 @@ export default function EventsPage() {
                   href={evt.ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full inline-flex justify-center rounded-xl px-4 py-2 font-semibold border bg-emerald-600 text-white hover:bg-emerald-700"
+                  className="w-full inline-flex justify-center rounded-xl px-4 py-2 font-semibold border bg-orange-600 text-white hover:bg-orange-700"
                 >
                   {evt.ctaLabel}
                 </a>
@@ -256,19 +260,26 @@ export default function EventsPage() {
         ))}
 
         {!loading && !events.length && (
-          <article className="rounded-3xl border border-lime-300/40 bg-white/60 p-6 text-sm text-gray-600">
-            Ingen events er synlige endnu. Sæt <strong>visible=YES</strong> i
-            fanen <strong>EVENTS</strong>.
-          </article>
+          SHOW_PLACEHOLDERS ? (
+            <article className="rounded-3xl border border-slate-200/40 bg-white/60 p-6 text-sm text-gray-600">
+              Ingen events er synlige endnu. Sæt <strong>visible=YES</strong> i fanen <strong>EVENTS</strong>.
+            </article>
+          ) : (
+            <article className="rounded-3xl border border-slate-200/40 bg-white/60 p-6 text-sm text-gray-600">
+              Der er ingen events at vise lige nu. Kig forbi igen snart — eller følg med på Facebook.
+            </article>
+          )
         )}
       </section>
       {/* [HELP:EVENTS:GRID] END */}
 
       {/* [HELP:EVENTS:FOOTNOTE] START — note under grid */}
-      <p className="mt-8 text-xs text-gray-500">
-        Tip: Du kan styre rækkefølge med <strong>order</strong> og tags med
-        <strong> tags</strong> (fx “Træning;Familie;Gratis”).
-      </p>
+      {SHOW_PLACEHOLDERS && (
+        <p className="mt-8 text-xs text-gray-500">
+          Tip: Du kan styre rækkefølge med <strong>order</strong> og tags med
+          <strong> tags</strong> (fx “Træning;Familie;Gratis”).
+        </p>
+      )}
       {/* [HELP:EVENTS:FOOTNOTE] END */}
     </main>
   );

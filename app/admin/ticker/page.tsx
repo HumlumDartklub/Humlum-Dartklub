@@ -573,7 +573,7 @@ export default function AdminTickerNyhederPage() {
                   } else if (saveState.row === rowIndex && saveState.message) {
                     rowColor = "bg-green-50";
                   } else if (isSelected) {
-                    rowColor = "bg-lime-50";
+                    rowColor = "bg-orange-50";
                   }
 
                   return (

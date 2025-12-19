@@ -535,7 +535,7 @@ export default function AdminIndmeldingerPage() {
               if (status === "paid") {
                 statusLabel = "Betalt";
                 statusClass =
-                  "inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800";
+                  "inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-800";
               } else if (status === "cancelled") {
                 statusLabel = "Annulleret";
                 statusClass =
@@ -689,7 +689,7 @@ export default function AdminIndmeldingerPage() {
                       {row.package_title || row.package_key || "—"}
                     </div>
                     {accepted && (
-                      <div className="mt-1 text-[10px] text-emerald-700">
+                      <div className="mt-1 text-[10px] text-orange-700">
                         Vilkår &amp; privatliv accepteret
                       </div>
                     )}

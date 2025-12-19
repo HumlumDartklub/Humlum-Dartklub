@@ -107,7 +107,7 @@ export default function NewsHeroOverlay() {
         className="card group h-full flex flex-col text-left cursor-pointer"
       >
         <div className="kicker mb-1">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           NYHEDER
         </div>
 
@@ -126,7 +126,7 @@ export default function NewsHeroOverlay() {
               )}
             </div>
 
-            <div className="text-xs text-lime-700 font-medium">
+            <div className="text-xs text-orange-700 font-medium">
               Klik for at læse historien →
             </div>
           </div>
@@ -162,8 +162,8 @@ export default function NewsHeroOverlay() {
                 }}
                 className={`h-2 w-2 rounded-full transition ${
                   i === idx
-                    ? "bg-lime-600"
-                    : "bg-lime-300 hover:bg-lime-500"
+                    ? "bg-orange-600"
+                    : "bg-slate-200 hover:bg-orange-500"
                 }`}
                 aria-label={`Vis nyhed ${i + 1}`}
               />
@@ -214,7 +214,7 @@ export default function NewsHeroOverlay() {
                   href={modalHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-xl bg-lime-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-lime-700"
+                  className="inline-flex items-center rounded-xl bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700"
                 >
                   {modalItem.label?.trim() || "Åbn link"}
                 </a>

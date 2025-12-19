@@ -63,32 +63,18 @@ function apiUrl(tab: string): string {
 export async function getForsideData(): Promise<{ map: SheetMap; updated?: string }> {
   const map: SheetMap = {};
 
-  // Forside / hero / kort
-  const forside = await safeJson<SheetApiResponse>(apiUrl("FORSIDE"));
-  map.FORSIDE = pickArray(forside);
+ const [forside, nyheder, ticker, klubinfo] = await Promise.all([
+  safeJson<SheetApiResponse>(apiUrl("FORSIDE")),
+  safeJson<SheetApiResponse>(apiUrl("NYHEDER")),
+  safeJson<SheetApiResponse>(apiUrl("TICKER")),
+  safeJson<SheetApiResponse>(apiUrl("KLUBINFO")),
+]);
 
-  // Nyheder
-  const nyheder = await safeJson<SheetApiResponse>(apiUrl("NYHEDER"));
-  map.NYHEDER = pickArray(nyheder);
+map.FORSIDE = pickArray(forside);
+map.NYHEDER = pickArray(nyheder);
+map.TICKER = pickArray(ticker).map((r: any) => ({ message: r?.message ?? "" }));
+map.KLUBINFO = pickArray(klubinfo);
 
-  // Ticker
-  const ticker = await safeJson<SheetApiResponse>(apiUrl("TICKER"));
-  map.TICKER = pickArray(ticker)
-    .map((r: any) => ({
-      message: r?.message ?? "",
-      title: r?.title ?? "",
-      pin: r?.pin ?? "",
-      date: r?.date ?? "",
-      order: Number(r?.order ?? 0),
-      start_on: r?.start_on ?? "",
-      end_on: r?.end_on ?? "",
-      channel: r?.channel ?? "",
-    }))
-    .filter((r: any) => String(r.message || "").trim() !== "");
-
-  // KLUBINFO – key/value-konfiguration (navn, tagline, kontakt, SoMe)
-  const klubinfo = await safeJson<SheetApiResponse>(apiUrl("KLUBINFO"));
-  map.KLUBINFO = pickArray(klubinfo);
 
   const updated =
     (forside as any)?.updated ||

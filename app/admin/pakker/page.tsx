@@ -388,13 +388,13 @@ export default function AdminPakkerPage() {
             <div
               className={[
                 "relative flex flex-col rounded-2xl border bg-white p-4 shadow-sm",
-                preview.featured ? "ring-2 ring-lime-500" : "",
+                preview.featured ? "ring-2 ring-orange-300" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
               {preview.badge && (
-                <div className="mb-2 inline-flex items-center rounded-full bg-lime-100 px-3 py-0.5 text-xs font-medium text-lime-800">
+                <div className="mb-2 inline-flex items-center rounded-full bg-orange-50 px-3 py-0.5 text-xs font-medium text-orange-800">
                   {preview.badge}
                 </div>
               )}
@@ -546,7 +546,7 @@ export default function AdminPakkerPage() {
                   } else if (saveState.row === rowIndex && saveState.message) {
                     rowColor = "bg-green-50";
                   } else if (isSelected) {
-                    rowColor = "bg-lime-50";
+                    rowColor = "bg-orange-50";
                   }
 
                   return (

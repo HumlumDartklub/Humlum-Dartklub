@@ -185,7 +185,7 @@ function kontingentStatus(row: MemberRow): { label: string; tone: KontingentTone
 }
 
 function kontingentToneClass(tone: KontingentTone): string {
-  if (tone === "ok") return "text-emerald-700";
+  if (tone === "ok") return "text-orange-700";
   if (tone === "soon") return "text-amber-700";
   if (tone === "expired") return "text-red-600";
   return "text-neutral-500";
@@ -463,7 +463,7 @@ export default function AdminMedlemslistePage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Søg i navn, email, by, pakke, hold..."
-              className="w-full rounded-full border border-neutral-300 px-4 py-2 text-sm shadow-sm focus:border-lime-500 focus:outline-none focus:ring-1 focus:ring-lime-500"
+              className="w-full rounded-full border border-neutral-300 px-4 py-2 text-sm shadow-sm focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -588,7 +588,7 @@ export default function AdminMedlemslistePage() {
                         Hold
                       </span>
                       <select
-                        className="rounded-full border border-neutral-300 bg-white px-2 py-1 text-xs focus:border-lime-500 focus:outline-none focus:ring-1 focus:ring-lime-500"
+                        className="rounded-full border border-neutral-300 bg-white px-2 py-1 text-xs focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300"
                         value={currentTeamId}
                         disabled={isSaving || teams.length === 0}
                         onChange={(e) =>
@@ -617,7 +617,7 @@ export default function AdminMedlemslistePage() {
                         Rolle
                       </span>
                       <select
-                        className="rounded-full border border-neutral-300 bg-white px-2 py-1 text-xs focus:border-lime-500 focus:outline-none focus:ring-1 focus:ring-lime-500"
+                        className="rounded-full border border-neutral-300 bg-white px-2 py-1 text-xs focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300"
                         value={currentRole}
                         disabled={isSaving}
                         onChange={(e) =>

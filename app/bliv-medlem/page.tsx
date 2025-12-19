@@ -335,9 +335,9 @@ export default function BlivMedlemPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* HEADER */}
-      <div className="mb-6 rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="inline-flex items-center gap-2 text-sm">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           <span>Medlemskab</span>
         </div>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight">
@@ -358,12 +358,12 @@ export default function BlivMedlemPage() {
                 key={p.key}
                 className={`relative flex h-full flex-col rounded-2xl border p-4 shadow-sm ${
                   p.key === selectedKey
-                    ? "border-emerald-400"
-                    : "border-lime-300 transition hover:border-emerald-400"
+                    ? "border-slate-200"
+                    : "border-slate-200 transition hover:border-orange-300"
                 }`}
               >
                 {p.badge && (
-                  <div className="absolute -right-3 -top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black shadow">
+                  <div className="absolute -right-3 -top-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold text-black shadow">
                     {p.badge}
                   </div>
                 )}
@@ -389,7 +389,7 @@ export default function BlivMedlemPage() {
                     <ul className="mt-3 space-y-1 text-sm text-slate-700">
                       {p.features.map((f, idx) => (
                         <li key={idx} className="flex gap-2">
-                          <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-orange-500" />
                           <span>{f}</span>
                         </li>
                       ))}
@@ -402,8 +402,8 @@ export default function BlivMedlemPage() {
                     onClick={() => onSelectPlan(p.key)}
                     className={`w-full rounded-xl px-4 py-2 text-sm font-semibold ${
                       p.key === selectedKey
-                        ? "bg-emerald-600 text-white"
-                        : "border border-lime-300 bg-white hover:border-emerald-400"
+                        ? "bg-orange-600 text-white"
+                        : "border border-slate-200 bg-white hover:border-orange-300"
                     }`}
                   >
                     {p.key === selectedKey ? "Valgt" : "Vælg denne pakke"}
@@ -412,12 +412,12 @@ export default function BlivMedlemPage() {
               </article>
             ))
           ) : (
-            <div className="col-span-full rounded-2xl border border-lime-300 bg-white p-4">
+            <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-4">
               Ingen medlemsformer fundet i arket endnu.
             </div>
           )
         ) : (
-          <div className="col-span-full rounded-2xl border border-lime-300 bg-white p-4">
+          <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-4">
             Henter medlemsformer…
           </div>
         )}
@@ -425,7 +425,7 @@ export default function BlivMedlemPage() {
 
       {/* FORM */}
       <div ref={scrollToFormRef} className="mt-10">
-        <div className="rounded-2xl border border-lime-300 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold text-slate-500">
@@ -595,7 +595,7 @@ export default function BlivMedlemPage() {
 
           {/* Familie-medlemmer */}
           {selectedPlan?.key === "familie" && (
-            <div className="mt-4 rounded-xl border border-lime-200 bg-lime-50 p-3">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-orange-50 p-3">
               <div className="text-sm font-semibold mb-2">
                 Ekstra familiemedlemmer
               </div>
@@ -680,7 +680,7 @@ export default function BlivMedlemPage() {
               Jeg accepterer klubbens{" "}
               <Link
                 href="/privatliv"
-                className="underline text-emerald-700"
+                className="underline text-orange-700"
                 target="_blank"
               >
                 privatlivspolitik
@@ -688,7 +688,7 @@ export default function BlivMedlemPage() {
               og{" "}
               <Link
                 href="/docs/vedtaegter.pdf"
-                className="underline text-emerald-700"
+                className="underline text-orange-700"
                 target="_blank"
               >
                 vedtægter
@@ -708,7 +708,7 @@ export default function BlivMedlemPage() {
                 onClick={goToPayment}
                 disabled={busy}
                 className={`rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 ${
-                  isValid ? "bg-emerald-600" : "bg-black"
+                  isValid ? "bg-orange-600" : "bg-black"
                 }`}
               >
                 {busy ? "Sender…" : "Fortsæt til betaling"}

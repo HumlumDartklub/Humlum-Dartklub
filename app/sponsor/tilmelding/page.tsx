@@ -325,7 +325,7 @@ export default function SponsorTilmeldingPage() {
         <div className="mt-8">
           <a
             href="/sponsor"
-            className="underline text-emerald-700 hover:text-emerald-800"
+            className="underline text-orange-700 hover:text-orange-800"
           >
             Tilbage til sponsorsiden
           </a>
@@ -342,7 +342,7 @@ export default function SponsorTilmeldingPage() {
       </p>
 
       {summaryText && (
-        <div className="mb-4 rounded-lg border border-lime-300 bg-lime-50 p-3 text-sm text-slate-800">
+        <div className="mb-4 rounded-lg border border-slate-200 bg-orange-50 p-3 text-sm text-slate-800">
           <div className="font-semibold">Vi har forudfyldt din opsummering</div>
           <div className="mt-1 text-xs text-slate-600">{sourceHint}</div>
           <div className="mt-2 text-xs text-slate-600">

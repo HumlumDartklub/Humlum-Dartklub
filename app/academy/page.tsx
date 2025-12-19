@@ -8,7 +8,7 @@ export default function AcademyPage() {
 
       <header className="section-header">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           ACADEMY
         </div>
         <h1 className="section-title">Humlum Dart Academy</h1>
@@ -62,7 +62,7 @@ export default function AcademyPage() {
 
       <section className="mt-8 section-header">
         <div className="kicker">
-          <span className="h-2 w-2 rounded-full bg-lime-500" />
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
           FORLØB & TIDER
         </div>
 

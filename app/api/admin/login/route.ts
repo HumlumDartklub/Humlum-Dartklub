@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   // Sæt httpOnly-cookie som middleware kan tjekke
   res.cookies.set(ADMIN_COOKIE, ADMIN_TOKEN, {
     httpOnly: true,
-    secure: true,
+    secure: (process.env.NEXT_PUBLIC_SITE_ENV || "").toLowerCase() === "prod",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 dage
