@@ -13,6 +13,7 @@ export default function NavBar() {
 
   /* [HELP:NAV:LABELS] START — labels (ingen WIP-badges på HP) */
   const academyLabel = "Humlum Dart Academy";
+  const arcadeLabel = "Konkurrencer 🎯";
   /* [HELP:NAV:LABELS] END */
 
   // [HELP:NAV:RENDER] START — header + nav
@@ -54,6 +55,10 @@ export default function NavBar() {
           <Link href="/sponsorvaeg">Sponsorvæg</Link>
           <Link href="/events">Events</Link>
           <Link href="/academy">{academyLabel}</Link>
+
+          {/* [HELP:NAV:ARCADE:DESKTOP] START */}
+          <Link href="/konkurrencer">{arcadeLabel}</Link>
+          {/* [HELP:NAV:ARCADE:DESKTOP] END */}
 
           <Link
             href="/admin/login"
@@ -143,6 +148,16 @@ export default function NavBar() {
               >
                 {academyLabel}
               </Link>
+
+              {/* [HELP:NAV:ARCADE:MOBILE] START */}
+              <Link
+                className="px-4 py-3 hover:bg-gray-50"
+                href="/konkurrencer"
+                onClick={() => setOpen(false)}
+              >
+                {arcadeLabel}
+              </Link>
+              {/* [HELP:NAV:ARCADE:MOBILE] END */}
 
               <Link
                 className="px-4 py-3 text-xs text-neutral-500 hover:bg-gray-50"

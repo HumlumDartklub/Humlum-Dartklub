@@ -46,6 +46,9 @@ const PUBLIC_TABS = new Set<string>([
   "VENNER",
   "SPONSORVAEG_TEKST",
   "BANESPONSOR_BANER",
+  // NOTE: ARCADE_EVENTS er IKKE offentlig.
+  // Konkurrence-events må ses på /konkurrencer (via /api/konkurrencer/events),
+  // men event_code må aldrig eksponeres offentligt.
 ]);
 /* [HELP:API:UTIL:env] END */
 
