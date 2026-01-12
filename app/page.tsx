@@ -142,9 +142,12 @@ export default function Page() {
             <Link href="/academy" className="btn btn-primary btn-primary-soft w-full">
               Dart Academy
             </Link>
-            <Link href="/om-klubben" className="btn btn-primary btn-primary-soft w-full">
-              Om klubben
-            </Link>
+            {/* [HELP:HOME:START_HER:OM_LINK] START */}
+<Link href="/om" className="btn btn-primary btn-primary-soft w-full">
+  Om klubben
+</Link>
+{/* [HELP:HOME:START_HER:OM_LINK] END */}
+
           </div>
         </div>
 
