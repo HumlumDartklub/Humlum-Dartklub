@@ -643,12 +643,17 @@ export default function OmPage() {
 
                 <ul className="space-y-2">
                   <li>
-                    <Link
-                      href="/vedtaegter"
-                      className="text-orange-700 hover:text-orange-800 underline"
-                    >
-                      Vedtægter (PDF)
-                    </Link>
+                    {/* [HELP:OM:DOCUMENTS:VEDTAEGTER_LINK] START */}
+<Link
+  href="/docs/vedtaegter.pdf"
+  className="text-orange-700 hover:text-orange-800 underline"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+  Vedtægter (PDF)
+</Link>
+{/* [HELP:OM:DOCUMENTS:VEDTAEGTER_LINK] END */}
+
                   </li>
                   <li>
                     <Link
