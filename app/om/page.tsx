@@ -332,7 +332,7 @@ export default function OmPage() {
   /** [HELP:OM:DERIVED:TRYOUT_DAYS] START */
   const tryoutDayLabels = useMemo(() => {
     const labels = tryoutRows.map(compactTryoutLabel).filter(Boolean);
-    return labels.length ? labels : ["Tirsdag 19:00-21:00", "Torsdag 19:00-21:00"];
+    return labels.length ? labels : ["Tirsdag 18:00-21:30", "Torsdag 18:00-21:30"];
   }, [tryoutRows]);
   /** [HELP:OM:DERIVED:TRYOUT_DAYS] END */
 
@@ -626,7 +626,7 @@ export default function OmPage() {
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-orange-500" />
                     <span>
-                      {safeText(cardDocuments?.title) || "Dokumenter (offentlige)"}
+                      {safeText(cardDocuments?.title) || "Dokumenter"}
                     </span>
                   </div>
                   <span className="inline-block transition-transform duration-200 group-open:rotate-180">
@@ -761,9 +761,9 @@ export default function OmPage() {
               plads.
             </p>
 
-            <h3 className="font-semibold mb-1">Træningstider (forventet)</h3>
+            <h3 className="font-semibold mb-1">Træningstider</h3>
             <ul className="list-disc ml-5 text-sm text-gray-800 mb-3">
-              <li>1-2 faste ugentlige træningsaftener</li>
+              <li>2 faste ugentlige træningsaftener</li>
               <li>Familie- og begynderfokus i opstartsfasen</li>
               <li>Turneringstræning når vi er flere aktive</li>
             </ul>
@@ -786,7 +786,7 @@ export default function OmPage() {
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-orange-50 p-3">
               <div className="text-xs font-semibold text-gray-700 mb-2">
-                Træningsdage (forventet)
+                Træningsdage 
               </div>
               <div className="flex flex-wrap gap-2">
                 {tryoutDayLabels.map((label, i) => (
@@ -799,7 +799,7 @@ export default function OmPage() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-gray-600">
-                Tidspunkter offentlig gøres snart. Send en mail, vi matcher dig med en
+                Send en mail, vi matcher dig med en
                 konkret dato efter din henvendelse.
               </p>
             </div>
