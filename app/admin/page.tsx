@@ -285,6 +285,23 @@ export default function AdminLanding() {
           </div>
         </Link>
 
+        {/* [HELP:ADMIN:KASSERER_DASH_LINK] START */}
+        <Link
+          href="/admin/kasserer-dashboard"
+          className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm active:scale-[0.98] transition"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold">Kasserer Dashboard</div>
+              <div className="text-sm opacity-70">
+                Hurtigt overblik (måned/kvartal/år, fornyelser, eksport)
+              </div>
+            </div>
+            <div aria-hidden className="text-xl">›</div>
+          </div>
+        </Link>
+        {/* [HELP:ADMIN:KASSERER_DASH_LINK] END */}
+
         <Link
           href="/admin/pakker"
           className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm active:scale-[0.98] transition"
