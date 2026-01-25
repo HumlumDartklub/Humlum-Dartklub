@@ -1,6 +1,114 @@
-import Link from "next/link";
+/* [HELP:PRIVACY:IMPORTS] START */
+type ClubInfoRow = {
+  key?: string;
+  value?: any;
+  visible?: string; // optional "YES"/"NO"
+};
 
-export default function PrivacyPage() {
+type SheetApiResponse =
+  | {
+      ok?: boolean;
+      rows?: any[];
+      items?: any[];
+      itemsNormalized?: any[];
+      updated?: string;
+    }
+  | any;
+
+function pickArray(p: any): any[] {
+  if (!p) return [];
+  if (Array.isArray(p.rows)) return p.rows;
+  if (Array.isArray(p.itemsNormalized)) return p.itemsNormalized;
+  if (Array.isArray(p.items)) return p.items;
+  return [];
+}
+
+function toText(v: any): string {
+  if (v === undefined || v === null) return "";
+  if (typeof v === "number" && Number.isFinite(v)) {
+    // 7600.0 -> "7600"
+    return Number.isInteger(v) ? String(v) : String(v);
+  }
+  return String(v);
+}
+
+function normalizeClubInfo(rows: ClubInfoRow[]): Record<string, string> {
+  return (rows || []).reduce((acc: Record<string, string>, row: any) => {
+    if (!row) return acc;
+
+    const k = String(row.key ?? "").trim();
+    if (!k) return acc;
+
+    // Respektér evt. visible-kolonne i Klubinfo (YES/NO)
+    const vis = String(row.visible ?? "").trim().toUpperCase();
+    if (vis && vis !== "YES") return acc;
+
+    const v = toText(row.value).trim();
+    acc[k] = v;
+    return acc;
+  }, {});
+}
+
+function buildClubinfoUrl(tab: string): string {
+  const t = encodeURIComponent(tab);
+
+  // Hvis NEXT_PUBLIC_SHEET_API er sat, går vi direkte på GAS (samme mønster som resten af sitet).
+  const gas = process.env.NEXT_PUBLIC_SHEET_API?.trim();
+  if (gas) return `${gas}?tab=${t}`;
+
+  // Server-side fetch kan ikke stole på relative stier → byg absolut URL til /api/sheet
+  const BASE =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000";
+
+  return new URL(`/api/sheet?tab=${t}`, BASE).toString();
+}
+
+async function fetchClubMap(): Promise<Record<string, string>> {
+  try {
+    const url = buildClubinfoUrl("KLUBINFO");
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return {};
+    const json = (await res.json()) as SheetApiResponse;
+    const rows = pickArray(json) as ClubInfoRow[];
+    return normalizeClubInfo(rows);
+  } catch {
+    return {};
+  }
+}
+/* [HELP:PRIVACY:IMPORTS] END */
+
+/* [HELP:PRIVACY:CONFIG] START */
+export const dynamic = "force-dynamic";
+/* [HELP:PRIVACY:CONFIG] END */
+
+export default async function PrivacyPage() {
+  /* [HELP:PRIVACY:DATA] START */
+  const clubMap = await fetchClubMap();
+
+  const clubName = (clubMap["club.name"] || "Humlum Dartklub").trim();
+  const email = (clubMap["club.email"] || "humlumdartklub@gmail.com").trim();
+  const phone = (clubMap["club.phone"] || "").trim();
+
+  const address = (clubMap["club.address"] || "").trim();
+  const postcode = (clubMap["club.postcode"] || "").trim();
+  const city = (clubMap["club.city"] || "").trim();
+  const cvr = (clubMap["club.cvr"] || "").trim();
+
+  const addressLine = (() => {
+    const tail = [postcode, city].filter(Boolean).join(" ");
+    if (!address && !tail) return "";
+    if (address && tail) return `${address}, ${tail}`;
+    return address || tail;
+  })();
+
+  // Hvis du senere vil styre datoen fra sheetet, kan du lægge en key i Klubinfo:
+  // key: "privacy.updated_at" value: "25-01-2026"
+  const updatedAt =
+    (clubMap["privacy.updated_at"] || "").trim() || "25-01-2026";
+  /* [HELP:PRIVACY:DATA] END */
+
   return (
     <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
       {/* [HELP:PRIVACY:HEADER] START */}
@@ -10,16 +118,14 @@ export default function PrivacyPage() {
           <span>Juridisk info</span>
         </div>
         <h1 className="mt-2 text-2xl font-extrabold">
-          Privatlivspolitik for Humlum Dartklub
+          Privatlivspolitik for {clubName}
         </h1>
         <p className="mt-1 text-sm text-gray-700">
           Her kan du læse, hvordan vi bruger og beskytter de
           personoplysninger, vi har om dig som medlem, forælder, sponsor
           eller samarbejdspartner.
         </p>
-        <p className="mt-1 text-xs text-gray-500">
-          Senest opdateret: [indsæt dato]
-        </p>
+        <p className="mt-1 text-xs text-gray-500">Senest opdateret: {updatedAt}</p>
       </section>
       {/* [HELP:PRIVACY:HEADER] END */}
 
@@ -83,13 +189,10 @@ export default function PrivacyPage() {
 
       <div className="space-y-6">
         {/* 1. Hvem er vi? */}
-        <section
-          id="hvem"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="hvem" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">1. Hvem er vi?</h2>
           <p className="text-sm text-gray-700 mb-2">
-            Humlum Dartklub (&quot;klubben&quot;, &quot;vi&quot;, &quot;os&quot;)
+            {clubName} (&quot;klubben&quot;, &quot;vi&quot;, &quot;os&quot;)
             er en lokal dartklub i Struer Kommune, der samler børn, unge og
             voksne omkring dart, fællesskab og gode oplevelser.
           </p>
@@ -97,29 +200,39 @@ export default function PrivacyPage() {
             Klubben er dataansvarlig for de personoplysninger, vi behandler
             om dig.
           </p>
+
+          {/* [HELP:PRIVACY:CONTACT] START */}
           <div className="text-sm text-gray-800">
             <div className="font-semibold mb-1">Kontaktoplysninger</div>
-            <p>Humlum Dartklub</p>
-            <p>[Adresse]</p>
-            <p>[Postnr] [By]</p>
-            <p>CVR: [hvis relevant]</p>
+            <p>{clubName}</p>
+            {addressLine ? <p>{addressLine}</p> : null}
+            {cvr ? <p>CVR: {cvr}</p> : null}
             <p>
               E-mail:{" "}
               <a
-                href="mailto:humlumdartklub@gmail.com"
+                href={`mailto:${email}`}
                 className="underline text-orange-700"
               >
-                humlumdartklub@gmail.com
+                {email}
               </a>
             </p>
+            {phone ? (
+              <p>
+                Telefon:{" "}
+                <a
+                  href={`tel:${phone}`}
+                  className="underline text-orange-700"
+                >
+                  {phone}
+                </a>
+              </p>
+            ) : null}
           </div>
+          {/* [HELP:PRIVACY:CONTACT] END */}
         </section>
 
         {/* 2. Hvilke oplysninger */}
-        <section
-          id="hvilke"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="hvilke" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             2. Hvilke oplysninger behandler vi?
           </h2>
@@ -129,16 +242,15 @@ export default function PrivacyPage() {
           </p>
           <div className="space-y-3 text-sm text-gray-700">
             <div>
-              <h3 className="font-semibold">
-                Medlemmer og prøvemedlemmer
-              </h3>
+              <h3 className="font-semibold">Medlemmer og prøvemedlemmer</h3>
               <ul className="mt-1 list-disc list-inside">
                 <li>Navn</li>
                 <li>Adresse, postnummer og by</li>
                 <li>E-mail og telefonnummer</li>
-                <li>Fødselsår og evt. køn</li>
+                <li>Fødselsdato og evt. køn</li>
                 <li>Valgt medlems-/kontingentpakke</li>
                 <li>Niveauregistrering (f.eks. hygge, øvet, turnering)</li>
+                <li>Medlemsnummer og evt. medlemskode (login)</li>
                 <li>Evt. DDU-nummer for turneringsspillere</li>
                 <li>
                   Evt. bemærkninger, du selv har skrevet i fritekstfelter
@@ -146,25 +258,24 @@ export default function PrivacyPage() {
                 </li>
               </ul>
             </div>
+
             <div>
-              <h3 className="font-semibold">
-                Familie-/husstandsmedlemmer
-              </h3>
+              <h3 className="font-semibold">Familie-/husstandsmedlemmer</h3>
               <p>
                 Ved familiepakker kan vi desuden registrere navn og
-                fødselsår på øvrige familiemedlemmer i husstanden.
+                fødselsdato på øvrige familiemedlemmer i husstanden.
               </p>
             </div>
+
             <div>
-              <h3 className="font-semibold">
-                Sponsorer og samarbejdspartnere
-              </h3>
+              <h3 className="font-semibold">Sponsorer og samarbejdspartnere</h3>
               <ul className="mt-1 list-disc list-inside">
                 <li>Kontaktpersons navn og stilling</li>
                 <li>E-mail og telefonnummer</li>
                 <li>Virksomhed/organisation</li>
               </ul>
             </div>
+
             <div>
               <h3 className="font-semibold">Billeder og video</h3>
               <p>
@@ -183,10 +294,7 @@ export default function PrivacyPage() {
         </section>
 
         {/* 3. Formål */}
-        <section
-          id="formaal"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="formaal" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             3. Hvad bruger vi oplysningerne til?
           </h2>
@@ -196,17 +304,12 @@ export default function PrivacyPage() {
               <ul className="mt-1 list-disc list-inside">
                 <li>Oprettelse og vedligeholdelse af medlemskab</li>
                 <li>Opkrævning og registrering af kontingent</li>
-                <li>
-                  Tilmelding til træning, hold, interne turneringer og
-                  events
-                </li>
+                <li>Tilmelding til træning, hold, interne turneringer og events</li>
                 <li>Vedligeholdelse af medlemslister og ventelister</li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Drift og økonomi i foreningen
-              </h3>
+              <h3 className="font-semibold">Drift og økonomi i foreningen</h3>
               <ul className="mt-1 list-disc list-inside">
                 <li>Bogføring og regnskab</li>
                 <li>Budgettering og planlægning</li>
@@ -217,58 +320,33 @@ export default function PrivacyPage() {
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Kommunikation og information
-              </h3>
+              <h3 className="font-semibold">Kommunikation og information</h3>
               <ul className="mt-1 list-disc list-inside">
-                <li>
-                  Praktisk info om træning, ændringer, turneringer og
-                  arrangementer
-                </li>
+                <li>Praktisk info om træning, ændringer, turneringer og arrangementer</li>
                 <li>Nyheder og generel medlemsinformation</li>
-                <li>
-                  Besvarelse af henvendelser pr. mail, via hjemmeside eller
-                  sociale medier
-                </li>
+                <li>Besvarelse af henvendelser pr. mail, via hjemmeside eller sociale medier</li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Udvikling af klubtilbud og synlighed
-              </h3>
+              <h3 className="font-semibold">Udvikling af klubtilbud og synlighed</h3>
               <ul className="mt-1 list-disc list-inside">
-                <li>
-                  Overordnet statistik (aldersgrupper, niveauer, pakker
-                  mv.) til planlægning
-                </li>
-                <li>
-                  Visning af klubaktiviteter på hjemmeside og sociale
-                  medier
-                </li>
-                <li>
-                  Kommunikation til og med sponsorer og samarbejdspartnere
-                </li>
+                <li>Overordnet statistik (aldersgrupper, niveauer, pakker mv.) til planlægning</li>
+                <li>Visning af klubaktiviteter på hjemmeside og sociale medier</li>
+                <li>Kommunikation til og med sponsorer og samarbejdspartnere</li>
               </ul>
             </div>
           </div>
         </section>
 
         {/* 4. Retsgrundlag */}
-        <section
-          id="retsgrundlag"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
-          <h2 className="text-lg font-semibold mb-2">
-            4. Juridisk grundlag (GDPR)
-          </h2>
+        <section id="retsgrundlag" className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-2">4. Juridisk grundlag (GDPR)</h2>
           <p className="text-sm text-gray-700 mb-3">
             Vi behandler dine personoplysninger på følgende grundlag:
           </p>
           <div className="space-y-3 text-sm text-gray-700">
             <div>
-              <h3 className="font-semibold">
-                Medlemsaftale – GDPR art. 6, stk. 1, litra b
-              </h3>
+              <h3 className="font-semibold">Medlemsaftale – GDPR art. 6, stk. 1, litra b</h3>
               <p>
                 Når du bliver medlem, indgår du en aftale med klubben. For
                 at kunne administrere dit medlemskab og levere de ydelser,
@@ -277,9 +355,7 @@ export default function PrivacyPage() {
               </p>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Retlig forpligtelse – GDPR art. 6, stk. 1, litra c
-              </h3>
+              <h3 className="font-semibold">Retlig forpligtelse – GDPR art. 6, stk. 1, litra c</h3>
               <p>
                 Vi har pligt til at opbevare visse oplysninger i forbindelse
                 med bogføring og regnskab, f.eks. dokumentation for
@@ -287,9 +363,7 @@ export default function PrivacyPage() {
               </p>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Legitim interesse – GDPR art. 6, stk. 1, litra f
-              </h3>
+              <h3 className="font-semibold">Legitim interesse – GDPR art. 6, stk. 1, litra f</h3>
               <p>
                 Vi har en legitim interesse i at kunne drive og udvikle
                 klubben, informere medlemmerne, planlægge aktiviteter og
@@ -305,9 +379,7 @@ export default function PrivacyPage() {
               </p>
             </div>
             <div>
-              <h3 className="font-semibold">
-                Samtykke – GDPR art. 6, stk. 1, litra a
-              </h3>
+              <h3 className="font-semibold">Samtykke – GDPR art. 6, stk. 1, litra a</h3>
               <p>
                 I nogle tilfælde kan vi bede om dit samtykke, fx ved brug af
                 særlige portrætbilleder eller bestemte former for
@@ -319,10 +391,7 @@ export default function PrivacyPage() {
         </section>
 
         {/* 5. Videregivelse */}
-        <section
-          id="videregivelse"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="videregivelse" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             5. Hvem deler vi oplysningerne med?
           </h2>
@@ -359,10 +428,7 @@ export default function PrivacyPage() {
         </section>
 
         {/* 6. Opbevaring */}
-        <section
-          id="opbevaring"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="opbevaring" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             6. Hvor længe gemmer vi oplysninger?
           </h2>
@@ -379,16 +445,12 @@ export default function PrivacyPage() {
               år), hvis der kan være behov for dokumentation eller historik.
             </li>
             <li>
-              <span className="font-semibold">
-                Regnskabs- og betalingsoplysninger:
-              </span>{" "}
+              <span className="font-semibold">Regnskabs- og betalingsoplysninger:</span>{" "}
               Opbevares som udgangspunkt i op til 5 år efter udløbet af det
               regnskabsår, materialet vedrører, jf. bogføringsreglerne.
             </li>
             <li>
-              <span className="font-semibold">
-                Sponsorer og samarbejdspartnere:
-              </span>{" "}
+              <span className="font-semibold">Sponsorer og samarbejdspartnere:</span>{" "}
               Gemmes så længe samarbejdet består og i en begrænset periode
               derefter, hvis det er relevant.
             </li>
@@ -402,13 +464,8 @@ export default function PrivacyPage() {
         </section>
 
         {/* 7. Rettigheder */}
-        <section
-          id="rettigheder"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
-          <h2 className="text-lg font-semibold mb-2">
-            7. Dine rettigheder
-          </h2>
+        <section id="rettigheder" className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-2">7. Dine rettigheder</h2>
           <p className="text-sm text-gray-700 mb-3">
             Som registreret har du en række rettigheder efter
             databeskyttelsesreglerne. Du kan blandt andet:
@@ -436,11 +493,8 @@ export default function PrivacyPage() {
           </ul>
           <p className="mt-3 text-sm text-gray-700">
             Hvis du vil gøre brug af dine rettigheder, kan du kontakte os på{" "}
-            <a
-              href="mailto:humlumdartklub@gmail.com"
-              className="underline text-orange-700"
-            >
-              humlumdartklub@gmail.com
+            <a href={`mailto:${email}`} className="underline text-orange-700">
+              {email}
             </a>
             . Vi bestræber os på at svare så hurtigt som muligt og inden for
             de frister, der følger af GDPR.
@@ -448,13 +502,8 @@ export default function PrivacyPage() {
         </section>
 
         {/* 8. Klage */}
-        <section
-          id="klage"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
-          <h2 className="text-lg font-semibold mb-2">
-            8. Klage til Datatilsynet
-          </h2>
+        <section id="klage" className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-2">8. Klage til Datatilsynet</h2>
           <p className="text-sm text-gray-700 mb-3">
             Hvis du er utilfreds med den måde, vi behandler dine
             personoplysninger på, håber vi først, at du vil kontakte os, så
@@ -482,10 +531,7 @@ export default function PrivacyPage() {
         </section>
 
         {/* 9. Ændringer */}
-        <section
-          id="aendringer"
-          className="rounded-2xl border bg-white p-4 shadow-sm"
-        >
+        <section id="aendringer" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             9. Ændringer i privatlivspolitikken
           </h2>
@@ -498,10 +544,7 @@ export default function PrivacyPage() {
         </section>
 
         {/* 10. Kort opsummering */}
-        <section
-          id="kort"
-          className="rounded-2xl border bg-orange-50 p-4 shadow-sm"
-        >
+        <section id="kort" className="rounded-2xl border bg-orange-50 p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-2">
             10. Kort og ærligt opsummeret
           </h2>
@@ -517,11 +560,8 @@ export default function PrivacyPage() {
           <p className="mt-2 text-sm text-gray-800">
             Du kan altid spørge, få indsigt, få rettet, få slettet eller
             sige &quot;nej tak&quot; til bestemte ting. Skriv bare til os på{" "}
-            <a
-              href="mailto:humlumdartklub@gmail.com"
-              className="underline text-orange-700"
-            >
-              humlumdartklub@gmail.com
+            <a href={`mailto:${email}`} className="underline text-orange-700">
+              {email}
             </a>
             .
           </p>
