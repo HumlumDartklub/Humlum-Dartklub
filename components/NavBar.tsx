@@ -54,6 +54,7 @@ export default function NavBar() {
           <Link href="/sponsor">Sponsor</Link>
           <Link href="/sponsorvaeg">Sponsorvæg</Link>
           <Link href="/events">Events</Link>
+          <Link href="/holdturnering">Holdturnering</Link>
           <Link href="/academy">{academyLabel}</Link>
 
           {/* [HELP:NAV:ARCADE:DESKTOP] START */}
@@ -139,6 +140,14 @@ export default function NavBar() {
                 onClick={() => setOpen(false)}
               >
                 Events
+              </Link>
+
+              <Link
+                className="px-4 py-3 hover:bg-gray-50"
+                href="/holdturnering"
+                onClick={() => setOpen(false)}
+              >
+                Holdturnering
               </Link>
 
               <Link

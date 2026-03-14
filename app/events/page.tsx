@@ -45,6 +45,7 @@ type UiEvent = {
   ctaLabel: string;
   ctaUrl?: string;
   order: number;
+  isHoldturnering: boolean;
 };
 /* [HELP:EVENTS:TYPES] END */
 
@@ -82,9 +83,18 @@ function formatDateLabel(r: EventRow): string {
     }
   }
 
-  const timePart = ts && te ? `${ts}–${te}` : ts ? ts : "";
+  const safeTimeEnd = te && /^\d{1,2}:\d{2}$/.test(te) ? te : "";
+  const timePart = ts && safeTimeEnd ? `${ts}–${safeTimeEnd}` : ts ? ts : "";
   if (datePart && timePart) return `${datePart} · ${timePart}`;
   return datePart || timePart || "";
+}
+
+function isHoldturneringEvent(r: EventRow): boolean {
+  const haystack = [r.title, r.description, r.tags, r.badge_label]
+    .map((v) => String(v ?? "").toLowerCase())
+    .join(" ");
+
+  return haystack.includes("hotel vildsund") || haystack.includes("strand serien");
 }
 /* [HELP:EVENTS:UTILS] END */
 
@@ -154,6 +164,7 @@ export default function EventsPage() {
           (ctaUrl ? "Læs mere" : "Tilmelding åbner snart");
 
         const order = toNum(r.order, 9999);
+        const isHoldturnering = isHoldturneringEvent(r);
 
         return {
           id,
@@ -166,6 +177,7 @@ export default function EventsPage() {
           ctaLabel,
           ctaUrl,
           order,
+          isHoldturnering,
         };
       })
       .sort((a, b) => a.order - b.order);
@@ -173,6 +185,9 @@ export default function EventsPage() {
     return mapped;
   }, [rows]);
   /* [HELP:EVENTS:MAP] END */
+
+  const featuredHoldturnering = useMemo(() => events.find((evt) => evt.isHoldturnering), [events]);
+  const regularEvents = useMemo(() => events.filter((evt) => !evt.isHoldturnering), [events]);
 
   /* [HELP:EVENTS:RENDER] START — hele siderendering */
   return (
@@ -197,9 +212,72 @@ export default function EventsPage() {
       </header>
       {/* [HELP:EVENTS:SECTION:HEADER] END */}
 
+      {/* [HELP:EVENTS:HOLDTURNERING:PROMO] START */}
+      <section className="mb-8">
+        <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white/80 shadow-sm backdrop-blur-sm">
+          <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="p-6 sm:p-8">
+              <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-800">
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                HOLDTURNERING
+              </div>
+              <h2 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+                Hotel Vildsund Strand Serien har fået sit eget område
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
+                Her har vi samlet det, folk faktisk skal bruge: samlet stilling, officiel kampplan og HDK's egne holdoversigter for Humlum 1, 2 og 3. Ingen spillerlister på forsiden — kun hold og kampe.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <a
+                  href="/holdturnering"
+                  className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+                >
+                  Se holdturnering
+                </a>
+                {featuredHoldturnering?.ctaUrl ? (
+                  <a
+                    href={featuredHoldturnering.ctaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+                  >
+                    {featuredHoldturnering.ctaLabel || "Åbn ekstern side"}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-slate-50/80 p-6 lg:border-l lg:border-t-0 sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Hurtigt overblik
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-4 text-center">
+                  <div className="text-2xl font-bold text-slate-900">11</div>
+                  <div className="mt-1 text-xs text-slate-500">hold</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-4 text-center">
+                  <div className="text-2xl font-bold text-slate-900">3</div>
+                  <div className="mt-1 text-xs text-slate-500">HDK-hold</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-4 text-center">
+                  <div className="text-2xl font-bold text-slate-900">11</div>
+                  <div className="mt-1 text-xs text-slate-500">runder</div>
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-slate-600">
+                Turneringen ligger stadig i Events-universet — men nu som sin egen skarpe side i stedet for endnu et lille kort i bunken.
+              </p>
+            </div>
+          </div>
+        </article>
+      </section>
+      {/* [HELP:EVENTS:HOLDTURNERING:PROMO] END */}
+
       {/* [HELP:EVENTS:GRID] START — kortgrid mappet over events */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-        {events.map((evt) => (
+      <section className="grid grid-cols-1 gap-6 items-stretch sm:grid-cols-2 lg:grid-cols-3">
+        {regularEvents.map((evt) => (
           /* [HELP:EVENTS:CARD] START — enkelt event-kort */
           <article
             key={evt.id}
@@ -259,7 +337,7 @@ export default function EventsPage() {
           /* [HELP:EVENTS:CARD] END */
         ))}
 
-        {!loading && !events.length && (
+        {!loading && !regularEvents.length && (
           SHOW_PLACEHOLDERS ? (
             <article className="rounded-3xl border border-slate-200/40 bg-white/60 p-6 text-sm text-gray-600">
               Ingen events er synlige endnu. Sæt <strong>visible=YES</strong> i fanen <strong>EVENTS</strong>.
