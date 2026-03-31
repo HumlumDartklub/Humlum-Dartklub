@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 
 const ADMIN_COOKIE = "hdk_admin_auth";
-const ADMIN_TOKEN = process.env.ADMIN_LOGIN_TOKEN || "hdk-admin";
+
+function getAdminAuthToken(): string {
+  return (
+    (process.env.ADMIN_LOGIN_TOKEN || "").trim() ||
+    (process.env.ADMIN_TOKEN || "").trim() ||
+    "hdk-admin"
+  );
+}
+
+function isProd(): boolean {
+  return (process.env.NEXT_PUBLIC_SITE_ENV || "").toLowerCase() === "prod";
+}
 
 export async function POST(req: Request) {
   let code = "";
@@ -15,7 +26,9 @@ export async function POST(req: Request) {
     // ignorer parse-fejl
   }
 
-  if (!code || code !== ADMIN_TOKEN) {
+  const adminToken = getAdminAuthToken();
+
+  if (!code || code !== adminToken) {
     return NextResponse.json(
       { ok: false, error: "Forkert kode." },
       { status: 401 }
@@ -24,13 +37,12 @@ export async function POST(req: Request) {
 
   const res = NextResponse.json({ ok: true });
 
-  // Sæt httpOnly-cookie som middleware kan tjekke
-  res.cookies.set(ADMIN_COOKIE, ADMIN_TOKEN, {
+  res.cookies.set(ADMIN_COOKIE, adminToken, {
     httpOnly: true,
-    secure: (process.env.NEXT_PUBLIC_SITE_ENV || "").toLowerCase() === "prod",
+    secure: isProd(),
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 dage
+    maxAge: 60 * 60 * 24 * 7,
   });
 
   return res;

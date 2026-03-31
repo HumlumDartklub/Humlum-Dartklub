@@ -24,10 +24,19 @@ function getSecret(): string {
   const s = (process.env.MEMBER_COOKIE_SECRET || "").trim();
   if (s) return s;
 
-  // Fallback: Hvis du ikke har sat MEMBER_COOKIE_SECRET endnu, så brug ADMIN_LOGIN_TOKEN
-  // (ikke ideelt, men bedre end at login crasher).
-  const fallback = (process.env.ADMIN_LOGIN_TOKEN || "").trim();
+  const fallback =
+    (process.env.ADMIN_LOGIN_TOKEN || "").trim() ||
+    (process.env.ADMIN_TOKEN || "").trim();
+
   return fallback || "";
+}
+
+function getAdminAuthToken(): string {
+  return (
+    (process.env.ADMIN_LOGIN_TOKEN || "").trim() ||
+    (process.env.ADMIN_TOKEN || "").trim() ||
+    "hdk-admin"
+  );
 }
 
 function base64urlEncode(buf: Buffer): string {
@@ -54,7 +63,7 @@ export function signMemberToken(
 ): { token: string; exp: number; maxAgeSeconds: number } {
   const secret = getSecret();
   if (!secret) {
-    throw new Error("Missing MEMBER_COOKIE_SECRET (eller ADMIN_LOGIN_TOKEN fallback).");
+    throw new Error("Missing MEMBER_COOKIE_SECRET (eller ADMIN_LOGIN_TOKEN/ADMIN_TOKEN fallback).");
   }
 
   const exp = Math.floor(Date.now() / 1000) + maxAgeSeconds;
@@ -76,7 +85,6 @@ export function verifyMemberToken(token?: string | null): MemberSession | null {
   if (!part || !sig) return null;
 
   const expected = hmacSha256(part, secret);
-  // Timing-safe compare
   const a = Buffer.from(expected);
   const b = Buffer.from(sig);
   if (a.length !== b.length) return null;
@@ -99,7 +107,6 @@ export function verifyMemberToken(token?: string | null): MemberSession | null {
 }
 
 function readCookieFromHeader(cookieHeader: string, name: string): string | null {
-  // Simple cookie parsing
   const parts = cookieHeader.split(";").map((s) => s.trim());
   for (const p of parts) {
     if (!p) continue;
@@ -121,7 +128,7 @@ export function getMemberFromRequest(req: Request): MemberSession | null {
 export function isAdminRequest(req: Request): boolean {
   const cookieHeader = req.headers.get("cookie") || "";
   const raw = readCookieFromHeader(cookieHeader, ADMIN_COOKIE);
-  const adminToken = (process.env.ADMIN_LOGIN_TOKEN || "hdk-admin").trim();
+  const adminToken = getAdminAuthToken();
   return !!raw && raw === adminToken;
 }
 
