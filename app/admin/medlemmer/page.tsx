@@ -347,16 +347,37 @@ export default function AdminMedlemslistePage() {
       });
     }
 
-    // Sortér efter efternavn, fornavn, medlems-ID
+            const memberIdNumber = (value: any): number => {
+      const raw = String(value ?? "").trim().toUpperCase();
+      const match = raw.match(/HDK-(\d+)/);
+      if (match) return Number(match[1]);
+
+      const fallback = raw.match(/(\d+)/);
+      return fallback ? Number(fallback[1]) : Number.POSITIVE_INFINITY;
+    };
+
+    // Sortér efter member_id (HDK-0001, HDK-0002 ...), derefter navn
     list = [...list].sort((a, b) => {
+      const ac = memberIdNumber(a.member_id);
+      const bc = memberIdNumber(b.member_id);
+
+      if (ac !== bc) return ac - bc;
+
+      const aId = String(a.member_id ?? "").toLowerCase();
+      const bId = String(b.member_id ?? "").toLowerCase();
+      if (aId < bId) return -1;
+      if (aId > bId) return 1;
+
       const an = fullName(a).toLowerCase();
       const bn = fullName(b).toLowerCase();
       if (an < bn) return -1;
       if (an > bn) return 1;
-      const aid = String(a.member_id ?? "");
-      const bid = String(b.member_id ?? "");
-      if (aid < bid) return -1;
-      if (aid > bid) return 1;
+
+      const aCode = String(a.member_code ?? "").toLowerCase();
+      const bCode = String(b.member_code ?? "").toLowerCase();
+      if (aCode < bCode) return -1;
+      if (aCode > bCode) return 1;
+
       return 0;
     });
 

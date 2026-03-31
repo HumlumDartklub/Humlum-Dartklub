@@ -317,17 +317,20 @@ export default function AdminLanding() {
           </div>
         </Link>
 
-        <div className="pointer-events-none rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm opacity-60">
+        <Link
+          href="/admin/galleri"
+          className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm active:scale-[0.98] transition"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-semibold">Filer (MEDIA)</div>
+              <div className="font-semibold">Galleri</div>
               <div className="text-sm opacity-70">
-                Upload/valg af billeder i senere trin
+                Upload billeder fra telefonen + styr noter og synlighed
               </div>
             </div>
             <div aria-hidden className="text-xl">›</div>
           </div>
-        </div>
+        </Link>
 
         <Link
           href="/admin/ticker"
