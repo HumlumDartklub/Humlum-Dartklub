@@ -29,7 +29,7 @@ function getAdminKey(): string | undefined {
 }
 
 const PUBLIC_TABS = new Set<string>([
-   "KLUBINFO",
+  "KLUBINFO",
   "TICKER",
   "NYHEDER",
   "EVENTS",
