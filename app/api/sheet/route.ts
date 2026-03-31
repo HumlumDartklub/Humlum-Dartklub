@@ -29,7 +29,7 @@ function getAdminKey(): string | undefined {
 }
 
 const PUBLIC_TABS = new Set<string>([
-  "KLUBINFO",
+   "KLUBINFO",
   "TICKER",
   "NYHEDER",
   "EVENTS",
@@ -46,6 +46,8 @@ const PUBLIC_TABS = new Set<string>([
   "VENNER",
   "SPONSORVAEG_TEKST",
   "BANESPONSOR_BANER",
+  "GALLERI",
+  "GALLERI_ALBUMS",
   // NOTE: ARCADE_EVENTS er IKKE offentlig.
   // Konkurrence-events må ses på /konkurrencer (via /api/konkurrencer/events),
   // men event_code må aldrig eksponeres offentligt.
