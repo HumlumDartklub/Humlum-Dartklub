@@ -6,6 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 
 type GalleryRow = Record<string, any> & { _row?: number };
 type AlbumRow = Record<string, any> & { _row?: number };
+type AlbumWithMeta = AlbumRow & {
+  count: number;
+  cover_url: string;
+};
 
 function normalizeString(value: any): string {
   return String(value ?? "").trim();
@@ -251,50 +255,55 @@ export default function GalleriPage() {
   /* [HELP:GALLERY_PUBLIC:LOAD] END */
 
   /* [HELP:GALLERY_PUBLIC:FILTERS] START */
-  const albumsWithMeta = useMemo(() => {
-    return albums.map((album) => {
-      const albumKey = normalizeAlbumKey(album.album_key);
-      const albumRows = rows.filter(
-        (row) => deriveRowAlbumKey(row) === albumKey,
-      );
-
-      const coverUrl =
-        normalizeString(album.cover_url) ||
-        rowImageUrl(albumRows[0] || {}) ||
-        "";
-
-      return {
-        ...album,
-        album_key: albumKey,
-        count: albumRows.length,
-        cover_url: coverUrl,
-      };
-    });
-  }, [albums, rows]);
-
-  const selectedAlbum = useMemo(() => {
-    if (!selectedAlbumKey) return null;
-    return (
-      albumsWithMeta.find(
-        (album) => normalizeAlbumKey(album.album_key) === selectedAlbumKey,
-      ) || null
+const albumsWithMeta = useMemo<AlbumWithMeta[]>(() => {
+  return albums.map((album) => {
+    const albumKey = normalizeAlbumKey(album.album_key);
+    const albumRows = rows.filter(
+      (row) => deriveRowAlbumKey(row) === albumKey,
     );
-  }, [albumsWithMeta, selectedAlbumKey]);
 
-  const selectedRows = useMemo(() => {
-    if (!selectedAlbumKey) return [];
-    return rows.filter(
-      (row) => deriveRowAlbumKey(row) === normalizeAlbumKey(selectedAlbumKey),
-    );
-  }, [rows, selectedAlbumKey]);
+    const coverUrl =
+      normalizeString(album.cover_url) ||
+      rowImageUrl(albumRows[0] || {}) ||
+      "";
 
-  const activeIndex = useMemo(() => {
-    if (!activeRow) return -1;
-    return selectedRows.findIndex(
-      (row) => rowStableId(row) === rowStableId(activeRow),
-    );
-  }, [selectedRows, activeRow]);
-  /* [HELP:GALLERY_PUBLIC:FILTERS] END */
+    return {
+      ...album,
+      album_key: albumKey,
+      title: normalizeString(album.title) || albumTitleFromKey(albumKey),
+      slug:
+        normalizeString(album.slug) ||
+        slugifyDa(album.title || albumKey),
+      description: normalizeString(album.description),
+      cover_url: coverUrl,
+      count: albumRows.length,
+    };
+  });
+}, [albums, rows]);
+
+const selectedAlbum = useMemo<AlbumWithMeta | null>(() => {
+  if (!selectedAlbumKey) return null;
+  return (
+    albumsWithMeta.find(
+      (album) => normalizeAlbumKey(album.album_key) === selectedAlbumKey,
+    ) || null
+  );
+}, [albumsWithMeta, selectedAlbumKey]);
+
+const selectedRows = useMemo(() => {
+  if (!selectedAlbumKey) return [];
+  return rows.filter(
+    (row) => deriveRowAlbumKey(row) === normalizeAlbumKey(selectedAlbumKey),
+  );
+}, [rows, selectedAlbumKey]);
+
+const activeIndex = useMemo(() => {
+  if (!activeRow) return -1;
+  return selectedRows.findIndex(
+    (row) => rowStableId(row) === rowStableId(activeRow),
+  );
+}, [selectedRows, activeRow]);
+/* [HELP:GALLERY_PUBLIC:FILTERS] END */
 
   useEffect(() => {
     if (typeof window === "undefined") return;
