@@ -66,12 +66,14 @@ const CLUBS: ClubInfo[] = [
     city: "7900 Nykøbing M",
     teams: ["Morsø Bulls 1"],
   },
-  {
-    key: "Lemvig",
-    label: "Lemvig",
-    venueName: "Lemvig",
-    teams: ["Lemvig 1"],
-  },
+ {
+  key: "Lemvig",
+  label: "Lemvig",
+  venueName: "Lemvig Motionscenter 24/7",
+  address: "Transportvej 21",
+  city: "7620 Lemvig",
+  teams: ["Lemvig 1"],
+},
 ];
 
 const MATCHES: Match[] = [
