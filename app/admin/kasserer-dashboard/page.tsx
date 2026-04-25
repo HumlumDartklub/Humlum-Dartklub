@@ -36,7 +36,7 @@ type Sub = {
   email?: string;
   phone?: string;
 
-  cycleMonths: number; // 3 eller 12 (fra betalingscyklus)
+  cycleMonths: number; // 1, 3, 6 eller 12 (fra billing_cycle/betalingscyklus)
   amountDue: number; // periode_beloeb (fx 387/597/1548)
 
   // DUE = forfalder
@@ -129,14 +129,22 @@ function todayUTC(): Date {
 function addMonthsUTC(d: Date, months: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate()));
 }
+function addDaysUTC(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
+}
 function endOfPrevDayUTC(d: Date): Date {
-  return new Date(d.getTime() - 24 * 60 * 60 * 1000);
+  return addDaysUTC(d, -1);
 }
 function startOfNextMonthUTC(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
 }
 function startOfSameDayUTC(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+function daysBetweenUTC(from: Date, to: Date): number {
+  const a = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const b = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
+  return Math.round((b - a) / (24 * 60 * 60 * 1000));
 }
 
 function rangeForSelection(
@@ -186,10 +194,101 @@ function subKey(r: Row): string {
   }
   return `PERSON:${asText(r.member_id) || fullName(r)}`;
 }
+function pickFirst(...values: any[]): any {
+  for (const v of values) {
+    if (asText(v)) return v;
+  }
+  return "";
+}
 function cycleMonthsFromRow(r: Row): number {
-  const c = toUpper(r.betalingscyklus);
-  if (c.includes("ÅR") || c.includes("AAR") || c.includes("YEAR")) return 12;
+  const c = toUpper(
+    pickFirst(
+      r.billing_cycle,
+      r.billingCycle,
+      r.betalingscyklus,
+      r.payment_cycle,
+      r.paymentCycle,
+      r.cycle
+    )
+  );
+
+  if (c.includes("ÅR") || c.includes("AAR") || c.includes("YEAR") || c.includes("ANNUAL")) return 12;
+  if (c.includes("HALV") || c.includes("6") || c.includes("SEMI")) return 6;
+  if (c.includes("MÅN") || c.includes("MAAN") || c.includes("MONTH") || c.includes("MD")) return 1;
   return 3;
+}
+function cycleLabelFromMonths(months: number): string {
+  if (months === 12) return "År";
+  if (months === 6) return "Halvår";
+  if (months === 1) return "Måned";
+  return "Kvartal";
+}
+function monthlyPriceFromRow(r: Row): number {
+  const price = asNumber(pickFirst(r.price_amount, r.monthly_price, r.monthlyPrice, r.pris));
+  const unit = asText(pickFirst(r.price_unit, r.unit)).toLowerCase();
+  if (!price) return 0;
+
+  if (unit.includes("år") || unit.includes("aar") || unit.includes("year")) return price / 12;
+  if (unit.includes("halv")) return price / 6;
+  if (unit.includes("kvart")) return price / 3;
+  return price;
+}
+function amountDueFromRow(r: Row, cycleMonths: number): number {
+  const explicit = asNumber(pickFirst(r.periode_beloeb, r.period_amount, r.amount_due, r.amountDue));
+  if (explicit > 0) return explicit;
+
+  const monthly = monthlyPriceFromRow(r);
+  if (monthly > 0) return monthly * cycleMonths;
+
+  return 0;
+}
+function dueDateFromRows(persons: Row[], today: Date): Date | null {
+  let due: Date | null = null;
+
+  for (const p of persons) {
+    const direct =
+      parseDateLike(p.naeste_forfald) ||
+      parseDateLike(p.next_due_date) ||
+      parseDateLike(p.billing_start) ||
+      parseDateLike(p.billing_start_date);
+
+    const paidUntil = parseDateLike(p.paid_until);
+    const fromPaidUntil = paidUntil ? addDaysUTC(paidUntil, 1) : null;
+
+    const candidate = direct || fromPaidUntil;
+    if (candidate && (!due || candidate.getTime() < due.getTime())) due = candidate;
+  }
+
+  if (due) return due;
+
+  const rep = persons[0];
+  if (!rep) return null;
+  const base = parseDateLike(rep.payment_date) || parseDateLike(rep.start_date) || parseDateLike(rep.grunddato);
+  if (!base) return null;
+
+  const months = cycleMonthsFromRow(rep);
+  let candidate = addMonthsUTC(startOfSameDayUTC(base), months);
+  while (candidate.getTime() < today.getTime()) candidate = addMonthsUTC(candidate, months);
+  return candidate;
+}
+function coverageStartFromRow(r: Row, conf: Config): Date | null {
+  const explicit = parseDateLike(r.coverage_start) || parseDateLike(r.coverageStart);
+  if (explicit) return explicit;
+
+  const paidUntil = parseDateLike(r.paid_until);
+  const billingStart = parseDateLike(r.billing_start) || parseDateLike(r.billing_start_date);
+
+  if (paidUntil) {
+    return parseDateLike(r.payment_date) || parseDateLike(r.start_date) || parseDateLike(r.grunddato) || billingStart || null;
+  }
+
+  const base = parseDateLike(r.payment_date) || parseDateLike(r.start_date) || parseDateLike(r.grunddato);
+  return base ? (conf.startFromNextMonth ? startOfNextMonthUTC(base) : startOfSameDayUTC(base)) : null;
+}
+function coverageEndFromRow(r: Row, coverageStart: Date | null, cycleMonths: number): Date | null {
+  const explicit = parseDateLike(r.coverage_end) || parseDateLike(r.coverageEnd) || parseDateLike(r.paid_until);
+  if (explicit) return explicit;
+  return coverageStart ? endOfPrevDayUTC(addMonthsUTC(coverageStart, cycleMonths)) : null;
 }
 
 // Overlap i hele måneder (UTC) til periodisering (COVERAGE)
@@ -417,13 +516,19 @@ export default function KassererDashboardPage() {
         setLoading(true);
         setError(null);
 
-        const tryTabs = ["KASSERER_DASH_SORT", "KASSERER_DASH"];
+        const tryTabs = ["MEDLEMMER", "KASSERER_DASH_SORT", "KASSERER_DASH"];
         let data: any[] = [];
         let used = "";
 
         for (const t of tryTabs) {
           try {
             const items = await fetchTab(t);
+            const activeItems = Array.isArray(items) ? items.filter(isActive) : [];
+            if (activeItems.length) {
+              data = activeItems;
+              used = t === "MEDLEMMER" ? "MEDLEMMER (direkte)" : t;
+              break;
+            }
             if (Array.isArray(items) && items.length) {
               data = items;
               used = t;
@@ -431,7 +536,7 @@ export default function KassererDashboardPage() {
             }
           } catch {}
         }
-        if (!used) throw new Error("Kunne ikke hente KASSERER_DASH_SORT/KASSERER_DASH via /api/sheet.");
+        if (!used) throw new Error("Kunne ikke hente MEDLEMMER/KASSERER_DASH_SORT/KASSERER_DASH via /api/sheet.");
 
         if (cancelled) return;
         setRows(data as Row[]);
@@ -451,7 +556,13 @@ export default function KassererDashboardPage() {
   const yearOptions = useMemo(() => {
     const ys = new Set<number>();
     for (const r of rows) {
-      const d = parseDateLike(r.payment_date) || parseDateLike(r.naeste_forfald) || parseDateLike(r.start_date);
+      const d =
+        parseDateLike(r.payment_date) ||
+        parseDateLike(r.naeste_forfald) ||
+        parseDateLike(r.billing_start) ||
+        parseDateLike(r.billing_start_date) ||
+        parseDateLike(r.paid_until) ||
+        parseDateLike(r.start_date);
       if (d) ys.add(d.getUTCFullYear());
     }
     const list = Array.from(ys.values()).sort((a, b) => a - b);
@@ -485,31 +596,24 @@ export default function KassererDashboardPage() {
     for (const [key, persons] of map.entries()) {
       const rep = persons[0];
 
-      // due (naeste_forfald) - tidligste
-      let due: Date | null = null;
-      let days: number | null = null;
-      for (const p of persons) {
-        const d = parseDateLike(p.naeste_forfald);
-        const dd = Number.isFinite(asNumber(p.dage_til_forfald)) ? asNumber(p.dage_til_forfald) : null;
-        if (d && (!due || d.getTime() < due.getTime())) due = d;
-        if (dd !== null && (days === null || dd < days)) days = dd;
-      }
+      // due: billing_start/naeste_forfald/paid_until styrer næste kasserer-handling
+      const due = dueDateFromRows(persons, now);
+      const days = due ? daysBetweenUTC(now, due) : null;
 
       const pkg = asText(rep.package_title) || "(Ukendt pakke)";
       const email = asText(rep.email).toLowerCase() || undefined;
       const phone = asText(rep.phone) || undefined;
 
       const cycleMonths = cycleMonthsFromRow(rep);
-      const amountDue = asNumber(rep.periode_beloeb);
+      const amountDue = amountDueFromRow(rep, cycleMonths);
 
       // cash
       const cashDate = parseDateLike(rep.payment_date);
       const cashAmount = amountDue;
 
-      // coverage
-      const base = cashDate || parseDateLike(rep.start_date) || parseDateLike(rep.grunddato);
-      const coverageStart = base ? (conf.startFromNextMonth ? startOfNextMonthUTC(base) : startOfSameDayUTC(base)) : null;
-      const coverageEnd = coverageStart ? endOfPrevDayUTC(addMonthsUTC(coverageStart, cycleMonths)) : null;
+      // coverage: paid_until vinder over gammel periodeberegning
+      const coverageStart = coverageStartFromRow(rep, conf);
+      const coverageEnd = coverageEndFromRow(rep, coverageStart, cycleMonths);
 
       out.push({
         key,
@@ -530,7 +634,7 @@ export default function KassererDashboardPage() {
     }
 
     return out;
-  }, [activeRows, conf.startFromNextMonth]);
+  }, [activeRows, conf.startFromNextMonth, now]);
 
   // --- DRIFT (periodetal pr mode) ---
   const periodSubs = useMemo(() => {
@@ -706,8 +810,8 @@ export default function KassererDashboardPage() {
 
   const modeHint = useMemo(() => {
     if (mode === "CASH") return "Cash = betalinger med payment_date i perioden.";
-    if (mode === "DUE") return "Forfalder = naeste_forfald i perioden.";
-    return "Dækket = betaling periodiseret ud fra cyklus (kvartal/år).";
+    if (mode === "DUE") return "Forfalder = billing_start/naeste_forfald i perioden. paid_until bruges som sikkerhed.";
+    return "Dækket = periodiseret ud fra paid_until/billing_start og cyklus (kvartal/halvår/år).";
   }, [mode]);
 
   return (
@@ -924,7 +1028,7 @@ export default function KassererDashboardPage() {
               </div>
 
               <p className="mt-3 text-xs text-neutral-500">
-                Kilde: <span className="font-semibold">naeste_forfald</span> og <span className="font-semibold">dage_til_forfald</span>.
+                Kilde: <span className="font-semibold">billing_start</span>, <span className="font-semibold">paid_until</span> og <span className="font-semibold">billing_cycle</span>.
               </p>
             </section>
 
@@ -942,6 +1046,7 @@ export default function KassererDashboardPage() {
                       <tr className="border-b border-neutral-200">
                         <th className="py-2 pr-3 text-left">Medlem</th>
                         <th className="py-2 pr-3 text-left">Pakke</th>
+                        <th className="py-2 pr-3 text-left">Cyklus</th>
                         <th className="py-2 pr-3 text-right">Beløb</th>
                         <th className="py-2 pr-3 text-left">Forfalder</th>
                         <th className="py-2 pr-3 text-left">Status</th>
@@ -955,6 +1060,7 @@ export default function KassererDashboardPage() {
                             {isFamilyPackage(s.rep) ? `Familie (${s.persons.length} pers.)` : fullName(s.rep)}
                           </td>
                           <td className="py-2 pr-3">{s.packageTitle}</td>
+                          <td className="py-2 pr-3">{cycleLabelFromMonths(s.cycleMonths)}</td>
                           <td className="py-2 pr-3 text-right tabular-nums">{formatCurrencyDKK(s.amountDue)}</td>
                           <td className="py-2 pr-3">{fmtDkDate(s.dueDate)}</td>
                           <td className="py-2 pr-3">
