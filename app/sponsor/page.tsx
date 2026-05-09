@@ -21,6 +21,7 @@ const SPONSOR_FORM_HREF = "/sponsor/tilmelding";
 /* [HELP:SPONSOR:SHEET:CONFIG] START — læs sponsorpakker fra HDK_Admin_v3 */
 const SHEET_KEY = "hdk-admin-dev";
 const SHEET_TAB_SPONSOR = "SPONSORPAKKER";
+const SHEET_TAB_ADDONS = "SPONSOR_TILKOEB";
 
 /**
  * Fane der styrer banesponsor-baner og om de er optaget
@@ -69,7 +70,7 @@ type Package = {
   featured?: boolean;
 };
 
-type AddOnKey = "youth" | "events" | "gear";
+type AddOnKey = string;
 
 type AddOn = {
   key: AddOnKey;
@@ -78,6 +79,7 @@ type AddOn = {
   monthly?: number;
   yearly?: number;
   hint?: string;
+  order?: number;
 };
 /* [HELP:SPONSOR:TYPES] END */
 
@@ -125,10 +127,9 @@ const FALLBACK_PACKAGES: Package[] = [
 /* [HELP:SPONSOR:PACKAGES:FALLBACK] END */
 
 /* [HELP:SPONSOR:ADDONS:DATA] START
- * Pitch: Tilkøb. Ret navn/ikon/priser/hint her.
- * (KAN senere gøres Sheet-styret fra SPONSOR_TILKOEB.)
+ * Pitch: Fallback-tilkøb. Hvis SPONSOR_TILKOEB kan læses, styrer arket visningen.
  * [HELP:SPONSOR:ADDONS:DATA] END */
-const ADDONS: AddOn[] = [
+const ADDONS_FALLBACK: AddOn[] = [
   {
     key: "youth",
     name: "Youth sponsor",
@@ -157,7 +158,7 @@ const ADDONS: AddOn[] = [
  * Banesponsor-konfiguration (kan ændres senere)
  * [HELP:SPONSOR:BANES] END */
 const BANESPONSOR_ADDON_KEY: AddOnKey = "gear";
-const BANESPONSOR_LANES: number[] = [1, 2, 3, 4, 5, 6];
+const BANESPONSOR_LANES: number[] = Array.from({ length: 12 }, (_, i) => i + 1);
 
 /**
  * Fallback for optagede baner, hvis BANESPONSOR_BANER-fanen ikke findes
@@ -260,6 +261,84 @@ function mapSheetRowToPackage(row: SheetRow): Package | null {
     featured,
   };
 }
+
+/* [HELP:SPONSOR:SHEET:MAP_ADDONS] START — map SPONSOR_TILKOEB-rækker til AddOn */
+function isBanesponsorAddonKey(key: string, name?: string): boolean {
+  const v = `${key} ${name || ""}`.toLowerCase();
+  return v.includes("bane") || v.includes("udstyr") || v.includes("gear");
+}
+
+function mapSheetRowToAddOn(row: SheetRow): AddOn | null {
+  const visible = isTruthyYes(row["visible"]);
+  if (!visible) return null;
+
+  const key = normalizeString(row["key"] || row["id"] || row["addon_key"]);
+  if (!key) return null;
+
+  const name = normalizeString(row["title"] || row["name"] || row["label"] || key);
+  const unit = normalizeString(row["price_unit"] || row["unit"] || "kr./år").toLowerCase();
+  const amount = Number(row["price_amount"] || row["price"] || 0) || 0;
+
+  const addOn: AddOn = {
+    key,
+    name,
+    icon: normalizeString(row["icon"]) || (isBanesponsorAddonKey(key, name) ? "🎯" : key.toLowerCase().includes("udvid") ? "🏗️" : "🤝"),
+    hint: normalizeString(row["features"] || row["hint"] || row["description"]),
+    order: Number(row["order"] || 999),
+  };
+
+  if (unit.includes("md") || unit.includes("måned") || unit.includes("maaned")) addOn.monthly = amount;
+  else addOn.yearly = amount;
+
+  return addOn;
+}
+
+function isExpansionAddonKey(key: string, name?: string): boolean {
+  const v = `${key} ${name || ""}`.toLowerCase();
+  return (
+    v.includes("udvid") ||
+    v.includes("fundraising") ||
+    v.includes("fremtid") ||
+    v.includes("lokale")
+  );
+}
+
+function filterVisibleAddOns(addOns: AddOn[]): AddOn[] {
+  return addOns.filter((a) => !isExpansionAddonKey(a.key, a.name));
+}
+
+/* [HELP:SPONSOR:SHEET:MAP_ADDONS] END */
+
+/* [HELP:SPONSOR:EXPANSION:CONFIG] START — fundraising-kort + plan-popup */
+const EXPANSION_PLAN_IMAGES = [
+  {
+    src: "/images/koncept/hdk-udvidelse-perspektiv.jpg",
+    alt: "Perspektivskitse af udvidet Humlum Dartklub med 12 baner",
+  },
+  {
+    src: "/images/koncept/hdk-udvidelse-koncept.jpg",
+    alt: "Konceptskitse for moderniseret klubrum i gymnastiksalen",
+  },
+];
+
+const EXPANSION_QUICK_AMOUNTS = [250, 500, 1000, 2500, 5000, 10000];
+
+const EXPANSION_PURPOSES = [
+  "Nye dartbaner 7–12",
+  "Paradart & tilgængelighed",
+  "Ungdom & prøvepile",
+  "Digital scoring / skærme",
+  "Lys, akustik & materialer",
+  "Lounge & klubmiljø",
+  "Generel støtte",
+];
+/* [HELP:SPONSOR:EXPANSION:CONFIG] END */
+
+/* [HELP:SPONSOR:MOBILEPAY:CONFIG] START — betaling via MobilePay */
+const MOBILEPAY_NUMBER = "97035";
+const MOBILEPAY_NAME = "Humlum Dartklub";
+const MOBILEPAY_QR_SRC = "/images/mobilepay/hdk-mobilepay-97035.jpg";
+/* [HELP:SPONSOR:MOBILEPAY:CONFIG] END */
 /* [HELP:SPONSOR:SHEET:MAP] END */
 
 /* ======================================
@@ -273,6 +352,14 @@ export default function SponsorPage() {
   const [packages, setPackages] = useState<Package[]>(FALLBACK_PACKAGES);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
   const [packagesError, setPackagesError] = useState<string | null>(null);
+
+  /* [HELP:SPONSOR:STATE:ADDONS_FROM_SHEET] START — tilkøb + fundraising styres fra Sheet */
+  const [addOns, setAddOns] = useState<AddOn[]>(filterVisibleAddOns(ADDONS_FALLBACK));
+  const banesponsorAddonKey = useMemo(
+    () => addOns.find((a) => isBanesponsorAddonKey(a.key, a.name))?.key || BANESPONSOR_ADDON_KEY,
+    [addOns],
+  );
+  /* [HELP:SPONSOR:STATE:ADDONS_FROM_SHEET] END */
 
   useEffect(() => {
     (async () => {
@@ -319,7 +406,33 @@ export default function SponsorPage() {
   }, []);
   /* [HELP:SPONSOR:STATE:PACKAGES] END */
 
+  /* [HELP:SPONSOR:STATE:ADDONS_FETCH] START — SPONSOR_TILKOEB bliver til kort på siden */
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/sheet?tab=${encodeURIComponent(SHEET_TAB_ADDONS)}&key=${encodeURIComponent(SHEET_KEY)}`,
+        );
+        if (!res.ok) return;
+
+        const data = (await res.json()) as ApiListResponse;
+        if (!data.ok || !data.items?.length) return;
+
+        const mapped = data.items
+          .map(mapSheetRowToAddOn)
+          .filter((a): a is AddOn => !!a)
+          .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+        if (mapped.length) setAddOns(filterVisibleAddOns(mapped));
+      } catch (err) {
+        console.error("Fejl ved hentning af SPONSOR_TILKOEB", err);
+      }
+    })();
+  }, []);
+  /* [HELP:SPONSOR:STATE:ADDONS_FETCH] END */
+
   /* [HELP:SPONSOR:STATE:BANE-LANES] START — optagede baner fra Sheet */
+  const [laneOptions, setLaneOptions] = useState<number[]>(BANESPONSOR_LANES);
   const [takenLanes, setTakenLanes] = useState<number[]>(
     BANESPONSOR_TAKEN_LANES_FALLBACK,
   );
@@ -337,7 +450,7 @@ export default function SponsorPage() {
         const data = (await res.json()) as ApiListResponse;
         if (!data.ok || !data.items?.length) return;
 
-        const lanes = data.items
+        const parsed = data.items
           .map((row) => {
             const laneRaw =
               row["bane"] ??
@@ -354,13 +467,15 @@ export default function SponsorPage() {
                 row["occupied"] ??
                 row["active"],
             );
-            return taken ? lane : null;
+            return { lane, taken };
           })
-          .filter((v): v is number => v != null);
+          .filter((v): v is { lane: number; taken: boolean } => v != null);
 
-        if (lanes.length) {
-          setTakenLanes(lanes);
-        }
+        const allLanes = parsed.map((x) => x.lane).sort((a, b) => a - b);
+        const taken = parsed.filter((x) => x.taken).map((x) => x.lane);
+
+        if (allLanes.length) setLaneOptions(allLanes);
+        setTakenLanes(taken);
       } catch (err) {
         console.error("Fejl ved hentning af BANESPONSOR_BANER", err);
       }
@@ -377,6 +492,20 @@ export default function SponsorPage() {
   const [clickAmount, setClickAmount] = useState<number>(500);
   const quick = [50, 100, 200, 500, 1000];
   /* [HELP:SPONSOR:STATE:ONECLICK] END */
+
+  /* [HELP:SPONSOR:STATE:EXPANSION] START — fundraising til udvidelse */
+  const [expansionActive, setExpansionActive] = useState(false);
+  const [expansionAmount, setExpansionAmount] = useState<number>(1000);
+  const [expansionPurpose, setExpansionPurpose] = useState<string>(
+    EXPANSION_PURPOSES[0],
+  );
+  const [plansOpen, setPlansOpen] = useState(false);
+  /* [HELP:SPONSOR:STATE:EXPANSION] END */
+
+  /* [HELP:SPONSOR:STATE:MOBILEPAY] START — feedback + stor scan-popup */
+  const [copiedPaymentNote, setCopiedPaymentNote] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  /* [HELP:SPONSOR:STATE:MOBILEPAY] END */
 
   /* [HELP:SPONSOR:STATE:EARMARK] START — øremærkning + anonym toggle */
   const [clickAnon, setClickAnon] = useState(false);
@@ -395,11 +524,7 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:STATE:ADDONS] START — valgte tilkøb (toggle) */
   const [selectedAddOns, setSelectedAddOns] = useState<
     Record<AddOnKey, boolean>
-  >({
-    youth: false,
-    events: false,
-    gear: false,
-  });
+  >({});
 
   const [selectedLane, setSelectedLane] = useState<number | null>(null);
 
@@ -407,7 +532,7 @@ export default function SponsorPage() {
     setSelectedAddOns((s) => {
       const next = !s[k];
       const updated = { ...s, [k]: next };
-      if (k === BANESPONSOR_ADDON_KEY && !next) {
+      if (isBanesponsorAddonKey(k) && !next) {
         setSelectedLane(null);
       }
       return updated;
@@ -419,7 +544,7 @@ export default function SponsorPage() {
     setSelectedLane(lane);
     setSelectedAddOns((s) => ({
       ...s,
-      [BANESPONSOR_ADDON_KEY]: true,
+      [banesponsorAddonKey]: true,
     }));
   };
   /* [HELP:SPONSOR:STATE:ADDONS] END */
@@ -434,27 +559,33 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:COMPUTE:ADDONS] START — tilkøbspriser (pr. år & pr. måned) */
   const addOnsYear = useMemo(() => {
     let y = 0;
-    ADDONS.forEach((a) => {
+    addOns.forEach((a) => {
       if (selectedAddOns[a.key] && a.yearly) y += a.yearly;
     });
     return y;
-  }, [selectedAddOns]);
+  }, [selectedAddOns, addOns]);
 
   const addOnsMonth = useMemo(() => {
     let m = 0;
-    ADDONS.forEach((a) => {
+    addOns.forEach((a) => {
       if (selectedAddOns[a.key] && a.monthly) m += a.monthly;
     });
     return m;
-  }, [selectedAddOns]);
+  }, [selectedAddOns, addOns]);
   /* [HELP:SPONSOR:COMPUTE:ADDONS] END */
 
   /* [HELP:SPONSOR:COMPUTE:ONECLICK] START — ét-klik total (begrænset af min/max) */
   const oneClick = clickActive ? clamp(clickAmount, CLICK_MIN, CLICK_MAX) : 0;
   /* [HELP:SPONSOR:COMPUTE:ONECLICK] END */
 
+  /* [HELP:SPONSOR:COMPUTE:EXPANSION] START — valgfri udvidelsesstøtte */
+  const expansionSupport = expansionActive
+    ? clamp(expansionAmount, CLICK_MIN, CLICK_MAX)
+    : 0;
+  /* [HELP:SPONSOR:COMPUTE:EXPANSION] END */
+
   /* [HELP:SPONSOR:COMPUTE:TOTALS] START — samlet pris pr. år og måned */
-  const totalYear = baseYear + addOnsYear + addOnsMonth * 12 + oneClick;
+  const totalYear = baseYear + addOnsYear + addOnsMonth * 12 + oneClick + expansionSupport;
   const totalMonth = Math.round(totalYear / 12);
   /* [HELP:SPONSOR:COMPUTE:TOTALS] END */
 
@@ -470,13 +601,44 @@ export default function SponsorPage() {
     [selectedAddOns],
   );
 
-  const readyForForm = Boolean(selected || clickActive || anyAddon);
+  const readyForForm = Boolean(selected || clickActive || expansionActive || anyAddon);
   /* [HELP:SPONSOR:COMPUTE:READY] END */
+
+  /* [HELP:SPONSOR:MOBILEPAY:REFERENCE] START — kort note til MobilePay-kommentar */
+  const buildPaymentNote = () => {
+    const selectedPkg = packages.find((x) => x.key === selected) ?? null;
+    const chosenAddons = addOns.filter((a) => selectedAddOns[a.key]);
+    const parts: string[] = [];
+
+    if (selectedPkg) parts.push(selectedPkg.name);
+
+    const baneAddon = chosenAddons.find((a) =>
+      isBanesponsorAddonKey(a.key, a.name),
+    );
+    if (baneAddon) {
+      parts.push(selectedLane ? `Banesponsor B${selectedLane}` : "Banesponsor");
+    }
+
+    chosenAddons
+      .filter((a) => !isBanesponsorAddonKey(a.key, a.name))
+      .forEach((a) => parts.push(a.name));
+
+    if (expansionActive) parts.push(`Udvidelse: ${expansionPurpose}`);
+
+    if (clickActive) {
+      const earmark = earmarkList.length ? earmarkList.join("+") : "generel";
+      parts.push(`Støtte: ${earmark}`);
+    }
+
+    const note = `HDK Sponsor - ${parts.length ? parts.join(" - ") : "støtte"}`;
+    return note.length > 95 ? `${note.slice(0, 92)}...` : note;
+  };
+  /* [HELP:SPONSOR:MOBILEPAY:REFERENCE] END */
 
   /* [HELP:SPONSOR:SUMMARY:BUILD] START — kompakt tekst til opsummering */
   const buildSummaryText = () => {
     const selectedPkg = packages.find((x) => x.key === selected) ?? null;
-    const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]);
+    const chosenAddons = addOns.filter((a) => selectedAddOns[a.key]);
 
     const lines: string[] = [];
 
@@ -496,7 +658,7 @@ export default function SponsorPage() {
         const price = addonPriceLabel(a);
         if (price) label += ` (${price})`;
 
-        if (a.key === BANESPONSOR_ADDON_KEY && selectedLane != null) {
+        if (isBanesponsorAddonKey(a.key, a.name) && selectedLane != null) {
           label += ` – ønsket bane: ${selectedLane}`;
         }
 
@@ -515,10 +677,19 @@ export default function SponsorPage() {
       }
     }
 
+    if (expansionActive) {
+      lines.push("");
+      lines.push(`Udvidelsesstøtte: ${fmt.format(expansionSupport)} (engang)`);
+      lines.push(`  • Ønsket støtteområde: ${expansionPurpose}`);
+    }
+
     lines.push("");
     lines.push("----------------------------------");
     lines.push(`I alt pr. år:    ${fmt.format(totalYear)}`);
     lines.push(`Ca. pr. måned:  ${fmt.format(totalMonth)}`);
+    lines.push("");
+    lines.push(`Betaling via MobilePay: #${MOBILEPAY_NUMBER} (${MOBILEPAY_NAME})`);
+    lines.push(`Betalingsnote: ${buildPaymentNote()}`);
     lines.push("");
     lines.push("Tak for at støtte Humlum Dartklub – Fællesskab & Præcision.");
 
@@ -537,13 +708,13 @@ export default function SponsorPage() {
   const buildSelectionPayload = () => {
     const p = packages.find((x) => x.key === selected) ?? null;
 
-    const chosenAddons = ADDONS.filter((a) => selectedAddOns[a.key]).map(
+    const chosenAddons = addOns.filter((a) => selectedAddOns[a.key]).map(
       (a) => ({
         key: a.key,
         name: a.name,
         monthly: a.monthly ?? null,
         yearly: a.yearly ?? null,
-        ...(a.key === BANESPONSOR_ADDON_KEY && selectedLane != null
+        ...(isBanesponsorAddonKey(a.key, a.name) && selectedLane != null
           ? { lane: selectedLane }
           : {}),
       }),
@@ -557,6 +728,13 @@ export default function SponsorPage() {
         }
       : null;
 
+    const expansionPayload = expansionActive
+      ? {
+          amount: expansionSupport,
+          purpose: expansionPurpose,
+        }
+      : null;
+
     const summaryText = buildSummaryText();
 
     return {
@@ -565,7 +743,14 @@ export default function SponsorPage() {
         : null,
       addOns: chosenAddons,
       oneClick: oneClickPayload,
+      expansion: expansionPayload,
       totals: { year: totalYear, month: totalMonth },
+      payment: {
+        method: "MobilePay",
+        number: MOBILEPAY_NUMBER,
+        name: MOBILEPAY_NAME,
+        note: buildPaymentNote(),
+      },
       summaryText,
       createdAt: new Date().toISOString(),
     };
@@ -611,9 +796,35 @@ export default function SponsorPage() {
       }
     }
 
+    if (payload.expansion?.amount) {
+      qs.set("expansion", String(payload.expansion.amount));
+      qs.set("expansionPurpose", payload.expansion.purpose);
+    }
+
     qs.set("totalYear", String(payload.totals.year));
+    qs.set("mobilepay", MOBILEPAY_NUMBER);
+    qs.set("paymentNote", payload.payment.note);
 
     window.location.href = `${SPONSOR_FORM_HREF}?${qs.toString()}`;
+  };
+
+  const copyPaymentNote = async () => {
+    const note = buildPaymentNote();
+
+    try {
+      await navigator.clipboard.writeText(note);
+      setCopiedPaymentNote(true);
+      window.setTimeout(() => setCopiedPaymentNote(false), 1600);
+    } catch {
+      window.prompt("Kopiér betalingsnote", note);
+    }
+  };
+
+  const openScanPayment = () => {
+    if (!readyForForm && !expansionActive) {
+      setExpansionActive(true);
+    }
+    setScanOpen(true);
   };
   /* [HELP:SPONSOR:SUMMARY:ACTIONS] END */
 
@@ -834,6 +1045,156 @@ export default function SponsorPage() {
             </button>
           </div>
           {/* [HELP:SPONSOR:ONECLICK] END */}
+
+
+          {/* [HELP:SPONSOR:EXPANSION_CARD] START — fundraising placeret ved siden af ét-klik støtte */}
+          <div
+            className={[
+              "h-full text-left rounded-3xl border p-6 shadow-md transition lg:col-span-2",
+              "border-slate-200 hover:shadow-lg hover:-translate-y-0.5",
+              expansionActive ? "ring-2 ring-orange-300/70" : "",
+              "bg-gradient-to-br from-orange-50 via-white to-blue-50 flex flex-col",
+            ].join(" ")}
+          >
+            <div className="grid gap-5 md:grid-cols-[1.35fr,0.95fr] items-stretch">
+              <div className="flex flex-col">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">
+                      Fundraising · fremtidens klubrum
+                    </p>
+                    <h3 className="mt-1 text-xl font-extrabold text-gray-950">
+                      🏗️ Støt udvidelsen
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-700">
+                      Hjælp os med at skabe et stærkere klubmiljø med op til 12 baner,
+                      paradart, ungdom, digital scoring og bedre rammer for events.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-gray-800">
+                    Valgfrit beløb
+                  </span>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {EXPANSION_QUICK_AMOUNTS.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      className={[
+                        "rounded-full border px-3 py-1 text-sm",
+                        q === expansionAmount
+                          ? "border-orange-200 bg-orange-100 text-gray-950"
+                          : "border-slate-200 bg-white hover:bg-orange-50",
+                      ].join(" ")}
+                      onClick={() => {
+                        setExpansionAmount(q);
+                        setExpansionActive(true);
+                      }}
+                    >
+                      {fmt0.format(q)} kr
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-[180px,1fr]">
+                  <div>
+                    <label className="text-sm font-medium text-gray-800">
+                      Valgfrit beløb
+                    </label>
+                    <input
+                      className="input-light mt-1 w-full"
+                      type="number"
+                      min={CLICK_MIN}
+                      max={CLICK_MAX}
+                      value={expansionAmount}
+                      onChange={(e) =>
+                        setExpansionAmount(
+                          clamp(
+                            Number(e.target.value || 0),
+                            CLICK_MIN,
+                            CLICK_MAX,
+                          ),
+                        )
+                      }
+                      onFocus={() => setExpansionActive(true)}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      Hvad vil I helst støtte?
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {EXPANSION_PURPOSES.map((purpose) => (
+                        <button
+                          key={purpose}
+                          type="button"
+                          onClick={() => {
+                            setExpansionPurpose(purpose);
+                            setExpansionActive(true);
+                          }}
+                          className={[
+                            "rounded-full border px-3 py-1 text-xs",
+                            expansionPurpose === purpose
+                              ? "border-orange-200 bg-orange-500 text-white"
+                              : "border-slate-200 bg-white text-gray-800 hover:bg-orange-50",
+                          ].join(" ")}
+                        >
+                          {purpose}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setPlansOpen(true)}
+                    className="btn btn-secondary"
+                  >
+                    Se planerne
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpansionActive(!expansionActive)}
+                    className="btn btn-primary"
+                  >
+                    {expansionActive ? "Fjern støtte" : "Tilføj støtte"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpansionActive(true);
+                      setScanOpen(true);
+                    }}
+                    className="rounded-full border border-blue-200 bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    📱 Scan &amp; betal
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPlansOpen(true)}
+                className="group overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-sm"
+                aria-label="Åbn planerne for udvidelsen"
+              >
+                <img
+                  src={EXPANSION_PLAN_IMAGES[0].src}
+                  alt={EXPANSION_PLAN_IMAGES[0].alt}
+                  className="h-52 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                />
+                <div className="p-3 text-xs text-gray-700">
+                  <span className="font-semibold text-gray-950">Plan: 12 baner</span>
+                  <span className="block">Klik for skitser, idé og nøglepunkter.</span>
+                </div>
+              </button>
+            </div>
+          </div>
+          {/* [HELP:SPONSOR:EXPANSION_CARD] END */}
         </div>
       </section>
       {/* [HELP:SPONSOR:SECTION:PACKAGES] END */}
@@ -846,9 +1207,9 @@ export default function SponsorPage() {
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {ADDONS.map((a) => {
+          {addOns.map((a) => {
             const active = !!selectedAddOns[a.key];
-            const isBane = a.key === BANESPONSOR_ADDON_KEY;
+            const isBane = isBanesponsorAddonKey(a.key, a.name);
             return (
               <div
                 key={a.key}
@@ -883,7 +1244,7 @@ export default function SponsorPage() {
                       og endelig aftale fastlægges sammen med klubben.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {BANESPONSOR_LANES.map((lane) => {
+                      {laneOptions.map((lane) => {
                         const laneActive = selectedLane === lane;
                         const laneTaken = takenLanes.includes(lane);
                         return (
@@ -964,6 +1325,69 @@ export default function SponsorPage() {
               </p>
             </div>
 
+            {/* [HELP:SPONSOR:MOBILEPAY_CARD] START — synlig betaling via MobilePay */}
+            <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 text-sm text-gray-900 shadow-sm">
+              <div className="grid gap-4 sm:grid-cols-[150px,1fr]">
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  className="group rounded-2xl border border-blue-100 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  aria-label="Åbn stor MobilePay QR-kode"
+                >
+                  <img
+                    src={MOBILEPAY_QR_SRC}
+                    alt={`MobilePay QR-kode til ${MOBILEPAY_NAME} #${MOBILEPAY_NUMBER}`}
+                    className="mx-auto h-44 w-full rounded-xl object-contain"
+                  />
+                  <span className="mt-2 block rounded-full bg-blue-600 px-3 py-1.5 text-center text-xs font-bold text-white group-hover:bg-blue-700">
+                    Klik · Scan mig
+                  </span>
+                </button>
+
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                    Betaling
+                  </p>
+                  <p className="mt-1 text-lg font-extrabold text-gray-950">
+                    MobilePay #{MOBILEPAY_NUMBER}
+                  </p>
+                  <p className="text-xs text-gray-600">{MOBILEPAY_NAME}</p>
+                  <p className="mt-3 text-xs leading-relaxed text-gray-700">
+                    Klik på QR-koden for en stor scan-visning. På telefon kan man
+                    også søge på nummeret i MobilePay. Husk betalingsnoten, så vi
+                    kan matche betalingen.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScanOpen(true)}
+                      className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                    >
+                      Åbn Scan mig
+                    </button>
+                    <button
+                      type="button"
+                      onClick={copyPaymentNote}
+                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold hover:bg-blue-50"
+                    >
+                      {copiedPaymentNote ? "Kopieret ✓" : "Kopiér note"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-blue-100 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                  Betalingsnote
+                </p>
+                <p className="mt-1 break-words text-sm font-semibold text-gray-950">
+                  {buildPaymentNote()}
+                </p>
+              </div>
+            </div>
+            {/* [HELP:SPONSOR:MOBILEPAY_CARD] END */}
+
             <div className="flex flex-col gap-2 text-sm">
               <a
                 href={SPONSOR_AGREEMENT_PDF}
@@ -1013,6 +1437,196 @@ export default function SponsorPage() {
         </div>
       </section>
       {/* [HELP:SPONSOR:SECTION:SUMMARY] END */}
+
+      {/* [HELP:SPONSOR:MOBILEPAY_SCAN_MODAL] START — stor scan-visning til MobilePay */}
+      {scanOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 px-4 py-6">
+          <div className="w-full max-w-3xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                  Scan mig
+                </p>
+                <h3 className="text-xl font-extrabold text-gray-950">
+                  Betal via MobilePay
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanOpen(false)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              >
+                Luk
+              </button>
+            </div>
+
+            <div className="grid gap-6 p-5 lg:grid-cols-[1.05fr,0.95fr]">
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4 text-center">
+                <p className="text-sm font-semibold text-gray-700">{MOBILEPAY_NAME}</p>
+                <p className="text-3xl font-black text-blue-700">#{MOBILEPAY_NUMBER}</p>
+                <div className="mt-4 rounded-3xl bg-white p-3 shadow-inner">
+                  <img
+                    src={MOBILEPAY_QR_SRC}
+                    alt={`Stor MobilePay QR-kode til ${MOBILEPAY_NAME} #${MOBILEPAY_NUMBER}`}
+                    className="mx-auto max-h-[68vh] w-full max-w-[420px] object-contain"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-center rounded-3xl bg-orange-50/70 p-5 text-sm text-gray-800">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">
+                  Betalingsdetaljer
+                </p>
+                <h4 className="mt-1 text-lg font-extrabold text-gray-950">
+                  Scan QR-koden eller søg på #{MOBILEPAY_NUMBER}
+                </h4>
+                <div className="mt-4 rounded-2xl border border-orange-100 bg-white p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                    Betalingsnote
+                  </p>
+                  <p className="mt-1 break-words text-base font-extrabold text-gray-950">
+                    {buildPaymentNote()}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyPaymentNote}
+                    className="mt-4 w-full rounded-full bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"
+                  >
+                    {copiedPaymentNote ? "Betalingsnote kopieret ✓" : "Kopiér betalingsnote"}
+                  </button>
+                </div>
+                <p className="mt-4 text-xs leading-relaxed text-gray-700">
+                  Skriv betalingsnoten i kommentarfeltet i MobilePay. Så kan klubben
+                  nemt se, om betalingen gælder sponsor, udvidelse, banesponsor eller
+                  anden støtte.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* [HELP:SPONSOR:MOBILEPAY_SCAN_MODAL] END */}
+
+      {/* [HELP:SPONSOR:EXPANSION_MODAL] START — lille vindue med planer */}
+      {plansOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 px-4 py-6">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">
+                  Udvidelsesplan
+                </p>
+                <h3 className="text-xl font-extrabold text-gray-950">
+                  Humlum Dartklub · 12 baner og stærkere fællesskab
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPlansOpen(false)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              >
+                Luk
+              </button>
+            </div>
+
+            <div className="grid gap-5 p-5 lg:grid-cols-[1.1fr,0.9fr]">
+              <div className="space-y-4">
+                {EXPANSION_PLAN_IMAGES.map((image) => (
+                  <img
+                    key={image.src}
+                    src={image.src}
+                    alt={image.alt}
+                    className="w-full rounded-3xl border border-slate-200 object-cover shadow-sm"
+                  />
+                ))}
+              </div>
+
+              <div className="rounded-3xl bg-orange-50/70 p-5 text-sm text-gray-800">
+                <h4 className="text-lg font-extrabold text-gray-950">
+                  Hvad går støtten til?
+                </h4>
+                <p className="mt-2 leading-relaxed">
+                  Projektet handler om at gøre klubmiljøet mere fleksibelt, tilgængeligt
+                  og brugbart for både dart, ungdom, paradart, events og sociale aktiviteter.
+                </p>
+
+                <ul className="mt-4 space-y-3">
+                  <li>🎯 Op til 12 dartbaner inkl. plads til paradart.</li>
+                  <li>📺 Digital scoring, skærme og tydelig klubinfo.</li>
+                  <li>💡 Bedre lys, akustik og robuste materialer.</li>
+                  <li>☕ Lounge, hyggezone og multifunktionelt klubmiljø.</li>
+                  <li>🤝 Et stærkt lokalt samlingspunkt — også uden for banen.</li>
+                </ul>
+
+                <div className="mt-5 rounded-2xl border border-orange-200 bg-white p-4">
+                  <p className="font-semibold text-gray-950">Valgt støtte</p>
+                  <p className="mt-1">
+                    {fmt.format(expansionAmount)} · {expansionPurpose}
+                  </p>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4">
+                  <div className="grid gap-3 sm:grid-cols-[110px,1fr]">
+                    <button
+                      type="button"
+                      onClick={() => setScanOpen(true)}
+                      className="rounded-xl border border-blue-100 bg-blue-50 p-2 text-center shadow-sm hover:bg-blue-100"
+                    >
+                      <img
+                        src={MOBILEPAY_QR_SRC}
+                        alt={`MobilePay QR-kode til ${MOBILEPAY_NAME} #${MOBILEPAY_NUMBER}`}
+                        className="mx-auto h-28 w-full rounded-lg object-contain"
+                      />
+                      <span className="mt-1 block text-[11px] font-bold text-blue-700">
+                        Scan mig
+                      </span>
+                    </button>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                        Betal nemt
+                      </p>
+                      <p className="mt-1 font-extrabold text-gray-950">
+                        MobilePay #{MOBILEPAY_NUMBER}
+                      </p>
+                      <p className="mt-2 text-xs text-gray-700">
+                        Brug gerne note: <span className="font-semibold">{buildPaymentNote()}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setScanOpen(true)}
+                        className="mt-3 rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                      >
+                        Åbn stor QR-kode
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpansionActive(true);
+                      setPlansOpen(false);
+                    }}
+                    className="btn btn-primary"
+                  >
+                    Tilføj støtte til udvidelsen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlansOpen(false)}
+                    className="btn btn-secondary"
+                  >
+                    Tilbage til sponsorvalg
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* [HELP:SPONSOR:EXPANSION_MODAL] END */}
     </main>
   );
 }

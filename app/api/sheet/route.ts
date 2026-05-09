@@ -21,8 +21,11 @@ function getGasUrl(): string {
 }
 
 function getAdminKey(): string | undefined {
-  // ADMIN_TOKEN = “nøgle” til GAS. Hvis ikke sat, bruger vi ADMIN_LOGIN_TOKEN.
+  // SHEET_ADMIN_KEY/GAS_ADMIN_KEY = nøgle mod Apps Script.
+  // ADMIN_LOGIN_TOKEN bør kun være login-kode til admin-siden.
   const k =
+    process.env.SHEET_ADMIN_KEY?.trim() ||
+    process.env.GAS_ADMIN_KEY?.trim() ||
     process.env.ADMIN_TOKEN?.trim() ||
     process.env.ADMIN_LOGIN_TOKEN?.trim();
   return k || undefined;
