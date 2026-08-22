@@ -563,11 +563,11 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:COMPUTE:ADDONS] END */
 
   /* [HELP:SPONSOR:COMPUTE:ONECLICK] START — ét-klik total (begrænset af min/max) */
-  const oneClick = clickActive ? clamp(clickAmount, CLICK_MIN, CLICK_MAX) : 0;
+  const oneClick = clickActive && clickAmount > 0 ? clamp(clickAmount, CLICK_MIN, CLICK_MAX) : 0;
   /* [HELP:SPONSOR:COMPUTE:ONECLICK] END */
 
   /* [HELP:SPONSOR:COMPUTE:EXPANSION] START — valgfri udvidelsesstøtte */
-  const expansionSupport = expansionActive
+  const expansionSupport = expansionActive && expansionAmount > 0
     ? clamp(expansionAmount, CLICK_MIN, CLICK_MAX)
     : 0;
   /* [HELP:SPONSOR:COMPUTE:EXPANSION] END */
@@ -948,15 +948,17 @@ export default function SponsorPage() {
                 min={CLICK_MIN}
                 max={CLICK_MAX}
                 value={clickAmount}
-                onChange={(e) =>
-                  setClickAmount(
-                    clamp(
-                      Number(e.target.value || 0),
-                      CLICK_MIN,
-                      CLICK_MAX,
-                    ),
-                  )
-                }
+                step={1}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setClickAmount(value === "" ? 0 : Number(value));
+                  setClickActive(true);
+                }}
+                onBlur={() => {
+                  if (clickAmount > 0) {
+                    setClickAmount(clamp(clickAmount, CLICK_MIN, CLICK_MAX));
+                  }
+                }}
                 onFocus={() => setClickActive(true)}
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -1044,7 +1046,7 @@ export default function SponsorPage() {
               "bg-gradient-to-br from-orange-50 via-white to-blue-50 flex flex-col",
             ].join(" ")}
           >
-            <div className="grid gap-5 items-stretch">
+            <div className="grid gap-5 md:grid-cols-[1.35fr,0.85fr] items-stretch">
               <div className="flex flex-col">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1096,15 +1098,17 @@ export default function SponsorPage() {
                       min={CLICK_MIN}
                       max={CLICK_MAX}
                       value={expansionAmount}
-                      onChange={(e) =>
-                        setExpansionAmount(
-                          clamp(
-                            Number(e.target.value || 0),
-                            CLICK_MIN,
-                            CLICK_MAX,
-                          ),
-                        )
-                      }
+                      step={1}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setExpansionAmount(value === "" ? 0 : Number(value));
+                        setExpansionActive(true);
+                      }}
+                      onBlur={() => {
+                        if (expansionAmount > 0) {
+                          setExpansionAmount(clamp(expansionAmount, CLICK_MIN, CLICK_MAX));
+                        }
+                      }}
                       onFocus={() => setExpansionActive(true)}
                     />
                   </div>
@@ -1155,6 +1159,14 @@ export default function SponsorPage() {
                     📱 Scan &amp; betal
                   </button>
                 </div>
+              </div>
+
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-sm">
+                <img
+                  src="/images/koncept/hdk-udvidelse-perspektiv.jpg"
+                  alt="Støt Humlum Dartklub – fællesskab, turneringer og oplevelser"
+                  className="h-full min-h-[280px] w-full object-cover"
+                />
               </div>
             </div>
           </div>
