@@ -52,11 +52,11 @@ type ClubKVRow = {
 /** [HELP:OM:BOARD] START */
 const BOARD = [
   { role: "Formand", name: "Ernst" },
-  { role: "Kasserer", name: "Søren" },
+  { role: "Kasserer", name: "Jussi" },
   { role: "Bestyrelsesmedlem", name: "Niels-Peder" },
-  { role: "Bestyrelsesmedlem", name: "Jan" },
+  { role: "Bestyrelsesmedlem", name: "Henrik" },
   { role: "Bestyrelsesmedlem", name: "Allan" },
-  { role: "Suppleant", name: "Henrik" },
+  { role: "Suppleant", name: "Jan" },
   { role: "Suppleant", name: "Lars" },
   { role: "Revisor", name: "Kasper" },
 ];

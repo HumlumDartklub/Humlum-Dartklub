@@ -309,18 +309,7 @@ function filterVisibleAddOns(addOns: AddOn[]): AddOn[] {
 
 /* [HELP:SPONSOR:SHEET:MAP_ADDONS] END */
 
-/* [HELP:SPONSOR:EXPANSION:CONFIG] START — fundraising-kort + plan-popup */
-const EXPANSION_PLAN_IMAGES = [
-  {
-    src: "/images/koncept/hdk-udvidelse-perspektiv.jpg",
-    alt: "Perspektivskitse af udvidet Humlum Dartklub med 12 baner",
-  },
-  {
-    src: "/images/koncept/hdk-udvidelse-koncept.jpg",
-    alt: "Konceptskitse for moderniseret klubrum i gymnastiksalen",
-  },
-];
-
+/* [HELP:SPONSOR:EXPANSION:CONFIG] START — fundraising til nye rammer */
 const EXPANSION_QUICK_AMOUNTS = [250, 500, 1000, 2500, 5000, 10000];
 
 const EXPANSION_PURPOSES = [
@@ -493,13 +482,12 @@ export default function SponsorPage() {
   const quick = [50, 100, 200, 500, 1000];
   /* [HELP:SPONSOR:STATE:ONECLICK] END */
 
-  /* [HELP:SPONSOR:STATE:EXPANSION] START — fundraising til udvidelse */
+  /* [HELP:SPONSOR:STATE:EXPANSION] START — fundraising til klubbens udvikling */
   const [expansionActive, setExpansionActive] = useState(false);
   const [expansionAmount, setExpansionAmount] = useState<number>(1000);
   const [expansionPurpose, setExpansionPurpose] = useState<string>(
     EXPANSION_PURPOSES[0],
   );
-  const [plansOpen, setPlansOpen] = useState(false);
   /* [HELP:SPONSOR:STATE:EXPANSION] END */
 
   /* [HELP:SPONSOR:STATE:MOBILEPAY] START — feedback + stor scan-popup */
@@ -623,7 +611,7 @@ export default function SponsorPage() {
       .filter((a) => !isBanesponsorAddonKey(a.key, a.name))
       .forEach((a) => parts.push(a.name));
 
-    if (expansionActive) parts.push(`Udvidelse: ${expansionPurpose}`);
+    if (expansionActive) parts.push(`Klubudvikling: ${expansionPurpose}`);
 
     if (clickActive) {
       const earmark = earmarkList.length ? earmarkList.join("+") : "generel";
@@ -679,7 +667,7 @@ export default function SponsorPage() {
 
     if (expansionActive) {
       lines.push("");
-      lines.push(`Udvidelsesstøtte: ${fmt.format(expansionSupport)} (engang)`);
+      lines.push(`Støtte til klubbens udvikling: ${fmt.format(expansionSupport)} (engang)`);
       lines.push(`  • Ønsket støtteområde: ${expansionPurpose}`);
     }
 
@@ -698,8 +686,8 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:SUMMARY:BUILD] END */
 
   /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — download / mail / form knappernes logik */
-  const SPONSOR_AGREEMENT_PDF = "/docs/HDK_Sponsoraftale.pdf";
-  const BANESPONSOR_AGREEMENT_PDF = "/docs/HDK_Banesponsor_aftale.pdf";
+  const SPONSOR_AGREEMENT_PDF = "/docs/HDK_Sponsoraftale_2026_27.pdf";
+  const BANESPONSOR_AGREEMENT_PDF = "/docs/HDK_Banesponsor_aftale_2026_27.pdf";
 
   const CLUB_EMAIL = "humlumdartklub@gmail.com";
 
@@ -1056,15 +1044,15 @@ export default function SponsorPage() {
               "bg-gradient-to-br from-orange-50 via-white to-blue-50 flex flex-col",
             ].join(" ")}
           >
-            <div className="grid gap-5 md:grid-cols-[1.35fr,0.95fr] items-stretch">
+            <div className="grid gap-5 items-stretch">
               <div className="flex flex-col">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">
-                      Fundraising · fremtidens klubrum
+                      Fundraising · nye rammer
                     </p>
                     <h3 className="mt-1 text-xl font-extrabold text-gray-950">
-                      🏗️ Støt udvidelsen
+                      🏗️ Støt klubbens udvikling
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-gray-700">
                       Hjælp os med at skabe et stærkere klubmiljø med op til 12 baner,
@@ -1148,14 +1136,7 @@ export default function SponsorPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={() => setPlansOpen(true)}
-                    className="btn btn-secondary"
-                  >
-                    Se planerne
-                  </button>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setExpansionActive(!expansionActive)}
@@ -1175,23 +1156,6 @@ export default function SponsorPage() {
                   </button>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setPlansOpen(true)}
-                className="group overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-sm"
-                aria-label="Åbn planerne for udvidelsen"
-              >
-                <img
-                  src={EXPANSION_PLAN_IMAGES[0].src}
-                  alt={EXPANSION_PLAN_IMAGES[0].alt}
-                  className="h-52 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                />
-                <div className="p-3 text-xs text-gray-700">
-                  <span className="font-semibold text-gray-950">Plan: 12 baner</span>
-                  <span className="block">Klik for skitser, idé og nøglepunkter.</span>
-                </div>
-              </button>
             </div>
           </div>
           {/* [HELP:SPONSOR:EXPANSION_CARD] END */}
@@ -1497,7 +1461,7 @@ export default function SponsorPage() {
                 </div>
                 <p className="mt-4 text-xs leading-relaxed text-gray-700">
                   Skriv betalingsnoten i kommentarfeltet i MobilePay. Så kan klubben
-                  nemt se, om betalingen gælder sponsor, udvidelse, banesponsor eller
+                  nemt se, om betalingen gælder sponsor, klubbens udvikling, banesponsor eller
                   anden støtte.
                 </p>
               </div>
@@ -1507,126 +1471,6 @@ export default function SponsorPage() {
       )}
       {/* [HELP:SPONSOR:MOBILEPAY_SCAN_MODAL] END */}
 
-      {/* [HELP:SPONSOR:EXPANSION_MODAL] START — lille vindue med planer */}
-      {plansOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 px-4 py-6">
-          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">
-                  Udvidelsesplan
-                </p>
-                <h3 className="text-xl font-extrabold text-gray-950">
-                  Humlum Dartklub · 12 baner og stærkere fællesskab
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPlansOpen(false)}
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-              >
-                Luk
-              </button>
-            </div>
-
-            <div className="grid gap-5 p-5 lg:grid-cols-[1.1fr,0.9fr]">
-              <div className="space-y-4">
-                {EXPANSION_PLAN_IMAGES.map((image) => (
-                  <img
-                    key={image.src}
-                    src={image.src}
-                    alt={image.alt}
-                    className="w-full rounded-3xl border border-slate-200 object-cover shadow-sm"
-                  />
-                ))}
-              </div>
-
-              <div className="rounded-3xl bg-orange-50/70 p-5 text-sm text-gray-800">
-                <h4 className="text-lg font-extrabold text-gray-950">
-                  Hvad går støtten til?
-                </h4>
-                <p className="mt-2 leading-relaxed">
-                  Projektet handler om at gøre klubmiljøet mere fleksibelt, tilgængeligt
-                  og brugbart for både dart, ungdom, paradart, events og sociale aktiviteter.
-                </p>
-
-                <ul className="mt-4 space-y-3">
-                  <li>🎯 Op til 12 dartbaner inkl. plads til paradart.</li>
-                  <li>📺 Digital scoring, skærme og tydelig klubinfo.</li>
-                  <li>💡 Bedre lys, akustik og robuste materialer.</li>
-                  <li>☕ Lounge, hyggezone og multifunktionelt klubmiljø.</li>
-                  <li>🤝 Et stærkt lokalt samlingspunkt — også uden for banen.</li>
-                </ul>
-
-                <div className="mt-5 rounded-2xl border border-orange-200 bg-white p-4">
-                  <p className="font-semibold text-gray-950">Valgt støtte</p>
-                  <p className="mt-1">
-                    {fmt.format(expansionAmount)} · {expansionPurpose}
-                  </p>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4">
-                  <div className="grid gap-3 sm:grid-cols-[110px,1fr]">
-                    <button
-                      type="button"
-                      onClick={() => setScanOpen(true)}
-                      className="rounded-xl border border-blue-100 bg-blue-50 p-2 text-center shadow-sm hover:bg-blue-100"
-                    >
-                      <img
-                        src={MOBILEPAY_QR_SRC}
-                        alt={`MobilePay QR-kode til ${MOBILEPAY_NAME} #${MOBILEPAY_NUMBER}`}
-                        className="mx-auto h-28 w-full rounded-lg object-contain"
-                      />
-                      <span className="mt-1 block text-[11px] font-bold text-blue-700">
-                        Scan mig
-                      </span>
-                    </button>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
-                        Betal nemt
-                      </p>
-                      <p className="mt-1 font-extrabold text-gray-950">
-                        MobilePay #{MOBILEPAY_NUMBER}
-                      </p>
-                      <p className="mt-2 text-xs text-gray-700">
-                        Brug gerne note: <span className="font-semibold">{buildPaymentNote()}</span>
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setScanOpen(true)}
-                        className="mt-3 rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
-                      >
-                        Åbn stor QR-kode
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpansionActive(true);
-                      setPlansOpen(false);
-                    }}
-                    className="btn btn-primary"
-                  >
-                    Tilføj støtte til udvidelsen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPlansOpen(false)}
-                    className="btn btn-secondary"
-                  >
-                    Tilbage til sponsorvalg
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* [HELP:SPONSOR:EXPANSION_MODAL] END */}
     </main>
   );
 }
