@@ -205,8 +205,7 @@ export default function EventsPage() {
           </h1>
 
           <p className="mt-2 text-gray-600 text-sm">
-            Turneringer, træning, hyggeaftener og lokale arrangementer. Her
-            vises de events, du har gjort synlige i admin-arket.
+            Turneringer, træning, hyggeaftener og lokale arrangementer. 
           </p>
         </div>
       </header>
@@ -267,7 +266,7 @@ export default function EventsPage() {
                 </div>
               </div>
               <p className="mt-4 text-sm text-slate-600">
-                Turneringen ligger stadig i Events-universet — men nu som sin egen skarpe side i stedet for endnu et lille kort i bunken.
+                Turneringen er i gang, kort oversigt — 
               </p>
             </div>
           </div>
