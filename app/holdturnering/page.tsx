@@ -30,7 +30,7 @@ const CLUBS: ClubInfo[] = [
     key: "Humlum",
     label: "Humlum Dartklub",
     venueName: "Humlum Dartklub",
-    address: "Chr. Gades Vej 30",
+    address: "Gørtlervej 2c",
     city: "7600 Struer",
     teams: ["Humlum 1", "Humlum 2", "Humlum 3"],
   },
