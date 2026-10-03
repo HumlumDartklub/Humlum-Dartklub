@@ -1,0 +1,2854 @@
+/**************************************
+ * Humlum Dartklub – HDK_Admin_v3
+ * JSON-baseret API inkl. admin-panel
+ *
+ * - doGet  : læser faner som JSON
+ * - doPost : join / markPaid / reject /
+ *            setPrimaryTeam / adminUpdateRow
+ **************************************/
+
+// [HELP:CONFIG] START
+var ADMIN_KEY = "HDKAdmin123";
+var TIMEZONE = "Europe/Copenhagen";
+var CLUB_EMAIL = "humlumdartklub@gmail.com"; // Fallback-adresse; kan overrides via Script Properties: CLUB_EMAIL
+var SEND_JOIN_EMAILS = true;
+// [HELP:CONFIG] END
+
+
+/**************************************
+ * JSON HELPERS
+ **************************************/
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj || {}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function jsonError(msg) {
+  var text = msg && msg.message ? msg.message : String(msg || "Unknown error");
+  return jsonResponse({ ok: false, error: text });
+}
+
+/**************************************
+ * EMAIL HELPERS
+ **************************************/
+
+/**
+ * Henter klub-mail fra Script Properties hvis sat.
+ * Fallback: CLUB_EMAIL-variablen.
+ */
+function getClubEmail_() {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty("CLUB_EMAIL");
+    return (p && String(p).trim()) || (CLUB_EMAIL && String(CLUB_EMAIL).trim()) || "";
+  } catch (e) {
+    return (CLUB_EMAIL && String(CLUB_EMAIL).trim()) || "";
+  }
+}
+
+/**
+ * Små helpers til at plukke værdier robust fra payload/item.
+ */
+// [HELP:EMAIL:SEND] START
+function pickStr_(obj, keys) {
+  if (!obj) return "";
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (!k) continue;
+    if (obj.hasOwnProperty(k) && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
+      return String(obj[k]).trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * Send email med bedste muligt "klub-afsender"-setup.
+ * - replyTo sættes til klubmail (så svar går til klubben)
+ * - name sættes til "Humlum Dartklub"
+ * - from forsøges sat til klubmail (kræver send-as/alias ELLER at script kører som klubkonto)
+ *
+ * Fejl i mail må aldrig stoppe API-responsen.
+ */
+function sendEmailSafe_(to, subject, body, options) {
+  if (!to) return false;
+
+  var clubEmail = getClubEmail_();
+  var opts = options || {};
+
+  // standarder
+  if (!opts.name) opts.name = "Humlum Dartklub";
+  if (clubEmail && !opts.replyTo) opts.replyTo = clubEmail;
+
+  // 1) Prøv GmailApp med from (hvis muligt)
+  try {
+    var o1 = {};
+    for (var k in opts) o1[k] = opts[k];
+    if (clubEmail) o1.from = clubEmail; // kræver alias eller at script kører som klubkonto
+    GmailApp.sendEmail(String(to).trim(), String(subject || "").trim(), String(body || ""), o1);
+    return true;
+  } catch (e1) {
+    // 2) Prøv GmailApp uden from
+    try {
+      var o2 = {};
+      for (var k2 in opts) o2[k2] = opts[k2];
+      if (o2.from) delete o2.from;
+      GmailApp.sendEmail(String(to).trim(), String(subject || "").trim(), String(body || ""), o2);
+      return true;
+    } catch (e2) {
+      // 3) Fallback: MailApp helt uden options
+      try {
+        MailApp.sendEmail(String(to).trim(), String(subject || "").trim(), String(body || ""));
+        return true;
+      } catch (e3) {
+        return false;
+      }
+    }
+  }
+}
+// [HELP:EMAIL:SEND] END
+
+
+/**
+ * Afsender bekræftelsesmail til medlem + notifikation til klub.
+ */
+function sendJoinEmails_(item, tabName) {
+  if (!SEND_JOIN_EMAILS) return { sentMember: false, sentClub: false };
+
+  function str(v) { return (v === undefined || v === null) ? "" : String(v).trim(); }
+  function pick_(obj, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") return str(obj[k]);
+    }
+    return "";
+  }
+  function fmtGender_(g) {
+    var x = str(g).toLowerCase();
+    if (!x) return "";
+    if (x === "m" || x === "mand" || x === "male") return "Mand";
+    if (x === "k" || x === "kvinde" || x === "female") return "Kvinde";
+    return str(g);
+  }
+  function fmtPrice_(amount, unit) {
+    var a = str(amount);
+    if (!a) return "";
+    if (!isNaN(Number(a))) a = String(Number(a));
+    var u = str(unit);
+    if (!u) return a + " kr.";
+    return a + " " + u;
+  }
+
+  var memberEmail = str(pick_(item, ["email"]));
+  var clubEmail = getClubEmail_();
+
+  var firstName = pick_(item, ["first_name", "fornavn"]);
+  var lastName = pick_(item, ["last_name", "efternavn"]);
+  var fullName = (firstName + " " + lastName).trim() || pick_(item, ["navn", "name"]) || "Nyt medlem";
+
+  var packageTitle = pick_(item, ["package_title", "package_id", "package_key", "pakke", "title"]) || "Medlemskab";
+  var price = fmtPrice_(pick_(item, ["price_amount", "price", "amount"]), pick_(item, ["price_unit", "unit"]));
+  var level = pick_(item, ["level", "niveau"]);
+  var gender = fmtGender_(pick_(item, ["gender", "køn"]));
+
+  var birthDate = pick_(item, ["birth_date", "fødselsdato"]);
+  var birthYear = pick_(item, ["birth_year", "fødselsår"]);
+
+  var phone = pick_(item, ["phone", "telefon"]);
+  var address = pick_(item, ["address"]);
+  var postcode = pick_(item, ["postcode", "postnr", "zip"]);
+  var city = pick_(item, ["city", "by"]);
+  var remark = pick_(item, ["remark", "bemærkning", "note", "kommentar", "comment"]);
+
+    var packageKey = pick_(item, ["package_key", "package_id", "package_slug", "package_title"]);
+  var isFamilyPackage =
+    /familie/i.test(packageTitle) ||
+    /family/i.test(packageTitle) ||
+    /familie/i.test(packageKey) ||
+    /family/i.test(packageKey);
+
+  var householdSizeNum = parseInt(pick_(item, ["household_size"]), 10);
+  if (isNaN(householdSizeNum)) householdSizeNum = 0;
+
+  var familyJson = pick_(item, ["family_members_json"]);
+  var familyList = [];
+  if (isFamilyPackage && familyJson) {
+    try { familyList = JSON.parse(familyJson) || []; } catch (e) { familyList = []; }
+  } else {
+    familyJson = "";
+    familyList = [];
+    householdSizeNum = 0;
+  }
+
+
+  var subjectMember = "Tak for din indmelding – Humlum Dartklub";
+  var subjectClub = "Ny indmelding – " + fullName + " (" + packageTitle + ")";
+
+  var sentMember = false;
+  var sentClub = false;
+
+  // Mail til medlem
+  try {
+    if (memberEmail) {
+      var lines = [];
+      lines.push("Hej " + (firstName || fullName) + ",");
+      lines.push("");
+      lines.push("Tusind tak for din indmelding i Humlum Dartklub – vi glæder os til at få dig med i fællesskabet.");
+      lines.push("");
+      lines.push("Vi har modtaget følgende oplysninger:");
+      lines.push("- Navn: " + fullName);
+      lines.push("- Medlemskab: " + packageTitle + (level ? (" (" + level + ")") : ""));
+      if (price) lines.push("- Pris: " + price);
+      if (gender) lines.push("- Køn: " + gender);
+      if (birthDate) lines.push("- Fødselsdato: " + birthDate);
+      else if (birthYear) lines.push("- Fødselsår: " + birthYear);
+      if (phone) lines.push("- Telefon: " + phone);
+      if (address || postcode || city) {
+        var adr = address || "";
+        if (postcode || city) {
+          if (adr) adr += ", ";
+          adr += (postcode || "") + (city ? " " + city : "");
+        }
+        lines.push("- Adresse: " + adr);
+      }
+
+             // [HELP:MAIL_JOIN_FAMILY_LIST_MEMBER] START
+      // Familie-medlemmer (kun hvis Familie-pakke) — vis navn + fuld fødselsdato hvis den findes
+      if (isFamilyPackage && householdSizeNum > 0) {
+        lines.push("- Antal medlemmer i husstanden: " + householdSizeNum);
+      }
+
+      if (isFamilyPackage && familyList && familyList.length) {
+        lines.push("");
+        lines.push("Familie-medlemmer:");
+        for (var i = 0; i < familyList.length; i++) {
+          var f = familyList[i] || {};
+
+          var fn = str(f.first_name || f.first || f.fornavn);
+          var ln = str(f.last_name  || f.last  || f.efternavn);
+
+          // Website sender typisk birth_date (YYYY-MM-DD). Vi viser den hvis den findes.
+          var bd = str(f.birth_date || f.birthDate || f.fødselsdato || f.birthdate);
+          var by = str(f.birth_year || f.fødselsår || f.birthYear || (bd ? String(bd).slice(0, 4) : ""));
+
+          var nm = (fn + " " + ln).trim() || str(f.name);
+          var showDob = bd || by;
+
+          lines.push("- " + (nm || "Medlem") + (showDob ? (" (" + showDob + ")") : ""));
+        }
+      }
+      // [HELP:MAIL_JOIN_FAMILY_LIST_MEMBER] END
+
+
+      if (remark) {
+        lines.push("");
+        lines.push("Din bemærkning:");
+        lines.push(remark);
+      }
+
+      lines.push("");
+      lines.push("Næste skridt:");
+      lines.push("1) Vi gennemgår din indmelding og vender tilbage hurtigst muligt.");
+      lines.push("2) Når kontingentet er registreret, får du en velkomstmail med dit medlemsnummer og (hvis relevant) adgang til medlemszonen.");
+      lines.push("");
+      lines.push("Har du rettelser til dine oplysninger, så svar bare på denne mail.");
+      lines.push("");
+      lines.push("Fællesskab & Præcision som kan mærkes");
+      lines.push("Humlum Dartklub");
+
+      MailApp.sendEmail({
+        to: memberEmail,
+        subject: subjectMember,
+        body: lines.join("\n"),
+        replyTo: clubEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentMember = true;
+    }
+  } catch (eMember) {}
+
+  // Mail til klub (notifikation)
+  try {
+    if (clubEmail) {
+      var clubLines = [];
+      clubLines.push("Ny indmelding modtaget via website.");
+      clubLines.push("");
+      clubLines.push("Navn: " + fullName);
+      clubLines.push("Medlemskab: " + packageTitle + (level ? (" (" + level + ")") : ""));
+      if (price) clubLines.push("Pris: " + price);
+      if (gender) clubLines.push("Køn: " + gender);
+      if (birthDate) clubLines.push("Fødselsdato: " + birthDate);
+      else if (birthYear) clubLines.push("Fødselsår: " + birthYear);
+      if (memberEmail) clubLines.push("E-mail: " + memberEmail);
+      if (phone) clubLines.push("Telefon: " + phone);
+      if (address || postcode || city) {
+        var adr2 = address || "";
+        if (postcode || city) {
+          if (adr2) adr2 += ", ";
+          adr2 += (postcode || "") + (city ? " " + city : "");
+        }
+        clubLines.push("Adresse: " + adr2);
+      }
+
+    
+            // [HELP:MAIL_JOIN_FAMILY_LIST_CLUB] START
+      if (isFamilyPackage && householdSizeNum > 0) {
+        clubLines.push("Husstand (antal): " + householdSizeNum);
+      }
+
+      if (isFamilyPackage && familyList && familyList.length) {
+        clubLines.push("Familie-medlemmer:");
+        for (var i = 0; i < familyList.length; i++) {
+          var f = familyList[i] || {};
+
+          var fn = str(f.first_name || f.first || f.fornavn);
+          var ln = str(f.last_name  || f.last  || f.efternavn);
+
+          var bd = str(f.birth_date || f.birthDate || f.fødselsdato || f.birthdate);
+          var by = str(f.birth_year || f.fødselsår || f.birthYear || (bd ? String(bd).slice(0, 4) : ""));
+
+          var nm = (fn + " " + ln).trim() || str(f.name);
+          var showDob = bd || by;
+
+          clubLines.push("- " + (nm || "Medlem") + (showDob ? (" (" + showDob + ")") : ""));
+        }
+      }
+      // [HELP:MAIL_JOIN_FAMILY_LIST_CLUB] END
+
+
+
+      if (remark) {
+        clubLines.push("");
+        clubLines.push("Bemærkning:");
+        clubLines.push(remark);
+      }
+
+      MailApp.sendEmail({
+        to: clubEmail,
+        subject: subjectClub,
+        body: clubLines.join("\n"),
+        replyTo: memberEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentClub = true;
+    }
+  } catch (eClub) {}
+
+  return { sentMember: sentMember, sentClub: sentClub };
+}
+
+
+/**
+ * Sponsor: notifikation til klub + (valgfrit) kvittering til sponsor.
+ */
+function sendSponsorEmails_(payload) {
+  function str(v) { return (v === undefined || v === null) ? "" : String(v).trim(); }
+
+  var clubEmail = getClubEmail_();
+
+  var firma = str(payload && (payload.firma || payload.name));
+  var kontakt = str(payload && (payload.kontakt || payload.contact));
+  var email = str(payload && payload.email);
+  var telefon = str(payload && (payload.telefon || payload.phone));
+  var website = str(payload && payload.website);
+  var level = str(payload && payload.level);
+  var kommentar = str(payload && (payload.kommentar || payload.comment || payload.note));
+
+  var subjectClub = "Ny sponsorhenvendelse – " + (firma || "Ukendt firma");
+  var subjectSponsor = "Tak for din sponsorhenvendelse – Humlum Dartklub";
+
+  var sentSponsor = false;
+  var sentClub = false;
+
+  // Kvittering til sponsor
+  try {
+    if (email) {
+      var sLines = [];
+      sLines.push("Hej " + (kontakt || firma || "der") + ",");
+      sLines.push("");
+      sLines.push("Tak fordi I rakte ud – vi er virkelig glade for interessen i at støtte Humlum Dartklub.");
+      sLines.push("");
+      sLines.push("Vi har modtaget jeres henvendelse med følgende info:");
+      if (firma) sLines.push("- Firma: " + firma);
+      if (kontakt) sLines.push("- Kontaktperson: " + kontakt);
+      if (telefon) sLines.push("- Telefon: " + telefon);
+      if (website) sLines.push("- Website: " + website);
+      if (level) sLines.push("- Interesse i: " + level);
+      if (kommentar) {
+        sLines.push("");
+        sLines.push("Jeres kommentar:");
+        sLines.push(kommentar);
+      }
+      sLines.push("");
+      sLines.push("Næste skridt:");
+      sLines.push("Vi vender tilbage hurtigst muligt (typisk inden 1–2 hverdage) med forslag til pakke, synlighed og det praktiske (logo/link, faktura osv.).");
+      sLines.push("");
+      sLines.push("Hvis I allerede har et logo klar, må I meget gerne svare på denne mail og vedhæfte det (PNG/SVG) – så går tingene hurtigt.");
+      sLines.push("");
+      sLines.push("På vegne af bestyrelsen");
+      sLines.push("Humlum Dartklub");
+      sLines.push("Fællesskab & Præcision som kan mærkes");
+
+      MailApp.sendEmail({
+        to: email,
+        subject: subjectSponsor,
+        body: sLines.join("\n"),
+        replyTo: clubEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+      sentSponsor = true;
+    }
+  } catch (eSponsor) {}
+
+  // Notifikation til klub
+  try {
+    if (clubEmail) {
+      var lines = [];
+      lines.push("Ny sponsorhenvendelse modtaget via website.");
+      lines.push("");
+      if (firma) lines.push("Firma: " + firma);
+      if (kontakt) lines.push("Kontaktperson: " + kontakt);
+      if (email) lines.push("E-mail: " + email);
+      if (telefon) lines.push("Telefon: " + telefon);
+      if (website) lines.push("Website: " + website);
+      if (level) lines.push("Interesse i pakke: " + level);
+      if (kommentar) {
+        lines.push("");
+        lines.push("Kommentar / opsummering:");
+        lines.push(kommentar);
+      }
+
+      MailApp.sendEmail({
+        to: clubEmail,
+        subject: subjectClub,
+        body: lines.join("\n"),
+        replyTo: email || undefined,
+        name: "Humlum Dartklub"
+      });
+      sentClub = true;
+    }
+  } catch (eClub) {}
+
+  return { sentSponsor: sentSponsor, sentClub: sentClub };
+}
+
+
+/**
+ * Bekræftelse til deltager + notifikation til klub ved prøvetræning.
+ */
+function sendTryoutEmails_(payload) {
+  function str(v) { return (v === undefined || v === null) ? "" : String(v).trim(); }
+
+  var clubEmail = getClubEmail_();
+
+  var name = str(payload && (payload.name || payload.navn)) || "Deltager";
+  var email = str(payload && payload.email);
+  var telefon = str(payload && (payload.phone || payload.telefon));
+  var dato = str(payload && payload.date);
+  var tid = str(payload && payload.time);
+  var note = str(payload && (payload.note || payload.bemærkning || payload.comment));
+
+  var subjectMember = "Prøvetræning hos Humlum Dartklub – vi har modtaget din forespørgsel";
+  var subjectClub = "Ny prøvetræning – " + name + (dato ? (" " + dato + (tid ? " kl. " + tid : "")) : "");
+
+  var sentMember = false;
+  var sentClub = false;
+
+  // Mail til deltager
+  try {
+    if (email) {
+      var linesMember = [];
+      linesMember.push("Hej " + name + ",");
+      linesMember.push("");
+      linesMember.push("Tak for din interesse i prøvetræning hos Humlum Dartklub – fedt at du vil prøve det af!");
+      linesMember.push("");
+      linesMember.push("Det her har vi noteret:");
+      if (dato) linesMember.push("- Ønsket dato: " + dato);
+      if (tid) linesMember.push("- Ønsket tidspunkt: " + tid);
+      if (telefon) linesMember.push("- Telefon: " + telefon);
+      if (note) {
+        linesMember.push("");
+        linesMember.push("Din besked:");
+        linesMember.push(note);
+      }
+      linesMember.push("");
+      linesMember.push("Næste skridt:");
+      linesMember.push("Vi svarer hurtigst muligt med en bekræftelse på tid og praktisk info.");
+      linesMember.push("");
+      linesMember.push("Praktisk (så du er helt tryg):");
+      linesMember.push("- Du behøver ikke eget udstyr – vi har låne-dartpil til nye.");
+      linesMember.push("- Det er for alle niveauer: ny, rusten eller klar på turnering.");
+      linesMember.push("");
+      linesMember.push("Vi glæder os til at se dig!");
+      linesMember.push("");
+      linesMember.push("Humlum Dartklub");
+      linesMember.push("Fællesskab & Præcision som kan mærkes");
+
+      MailApp.sendEmail({
+        to: email,
+        subject: subjectMember,
+        body: linesMember.join("\n"),
+        replyTo: clubEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentMember = true;
+    }
+  } catch (e1) {}
+
+  // Mail til klub
+  try {
+    if (clubEmail) {
+      var linesClub = [];
+      linesClub.push("Ny prøvetræningsforespørgsel modtaget via website.");
+      linesClub.push("");
+      if (dato) linesClub.push("Dato: " + dato);
+      if (tid) linesClub.push("Tidspunkt: " + tid);
+      linesClub.push("Navn: " + name);
+      if (email) linesClub.push("E-mail: " + email);
+      if (telefon) linesClub.push("Telefon: " + telefon);
+      if (note) {
+        linesClub.push("");
+        linesClub.push("Besked:");
+        linesClub.push(note);
+      }
+
+      MailApp.sendEmail({
+        to: clubEmail,
+        subject: subjectClub,
+        body: linesClub.join("\n"),
+        replyTo: email || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentClub = true;
+    }
+  } catch (e2) {}
+
+  return { sentMember: sentMember, sentClub: sentClub };
+}
+
+/*******************************
+ * [HELP:MAIL_PAID] START
+ *******************************/
+function makeMemberId_(memberRowIndex) {
+  var n = parseInt(memberRowIndex, 10);
+  if (!n || n < 2) n = 2;
+  var num = n - 1; // row 2 => 1
+  return "HDK-" + ("0000" + num).slice(-4);
+}
+
+function makeMemberCode_() {
+  // 6-cifret personlig kode til medlemslogin
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function getRowObject_(sheet, rowIndex) {
+  var header = getHeaderMap(sheet);
+  var headers = header.headers;
+  var lastCol = header.lastCol;
+  var row = sheet.getRange(rowIndex, 1, 1, lastCol).getValues()[0];
+  var obj = {};
+  for (var i = 0; i < headers.length; i++) {
+    var key = headers[i];
+    if (!key) continue;
+    obj[key] = row[i];
+  }
+  return obj;
+}
+
+function sendPaidEmails_(joinTabName, joinRowNumber, memberRowNumber, paymentMethod) {
+  function str(v) { return (v === undefined || v === null) ? "" : String(v).trim(); }
+  function fmtPrice_(amount, unit) {
+    var a = str(amount);
+    if (!a) return "";
+    if (!isNaN(Number(a))) a = String(Number(a));
+    var u = str(unit);
+    if (!u) return a + " kr.";
+    return a + " " + u;
+  }
+
+  var clubEmail = getClubEmail_();
+  var ss = getSpreadsheet();
+
+  var inSheet = ss.getSheetByName(joinTabName);
+  var memSheet = ss.getSheetByName("MEDLEMMER");
+  if (!inSheet || !memSheet) return { sentMember: false, sentClub: false };
+
+  var joinItem = getRowObject_(inSheet, joinRowNumber);
+  var memItem = getRowObject_(memSheet, memberRowNumber);
+
+  var firstName = str(memItem.first_name || joinItem.first_name);
+  var fullName = (str(memItem.first_name) + " " + str(memItem.last_name)).trim() ||
+                 (str(joinItem.first_name) + " " + str(joinItem.last_name)).trim() ||
+                 "Medlem";
+
+  var memberEmail = str(memItem.email || joinItem.email);
+  var memberId = str(memItem.member_id);
+  var memberCode = str(memItem.member_code);
+
+  var packageTitle = str(memItem.package_title || joinItem.package_title || memItem.package_key || joinItem.package_key) || "Medlemskab";
+  var price = fmtPrice_(memItem.price_amount || joinItem.price_amount, memItem.price_unit || joinItem.price_unit);
+
+  var sentMember = false;
+  var sentClub = false;
+
+  // Velkomstmail til medlem
+  try {
+    if (memberEmail) {
+      var subject = "Velkommen i Humlum Dartklub – dit medlemsnummer";
+      var lines = [];
+      lines.push("Hej " + (firstName || fullName) + ",");
+      lines.push("");
+      lines.push("Velkommen! Vi har nu registreret din betaling, og dit medlemskab er aktivt.");
+      lines.push("");
+      if (memberId) lines.push("Medlemsnummer: " + memberId);
+      if (packageTitle) lines.push("Medlemskab: " + packageTitle + (price ? (" (" + price + ")") : ""));
+      if (paymentMethod) lines.push("Betaling: " + paymentMethod);
+
+           // [HELP:MAIL_PAID_FAMILY_LIST] START
+      // Familie-liste (kun hvis Familie-pakke) — vis navn + fuld fødselsdato (YYYY-MM-DD) hvis den findes
+      try {
+        var pkgKey = String(joinItem.package_key || "");
+        var isFamily = /familie/i.test(packageTitle) || /familie/i.test(pkgKey);
+        if (isFamily) {
+          var famJson = String(joinItem.family_members_json || "");
+          if (famJson) {
+            var famList = JSON.parse(famJson);
+            if (famList && famList.length) {
+              lines.push("");
+              lines.push("Familie-medlemmer registreret:");
+              for (var fi = 0; fi < famList.length; fi++) {
+                var f = famList[fi] || {};
+
+                var fn = str(f.first_name || f.first || f.fornavn);
+                var ln = str(f.last_name  || f.last  || f.efternavn);
+
+                var bd = str(f.birth_date || f.birthDate || f.fødselsdato || f.birthdate);
+                var by = str(f.birth_year || f.fødselsår || f.birthYear || (bd ? String(bd).slice(0, 4) : ""));
+
+                var showDob = bd || by;
+                var nm = [fn, ln].filter(Boolean).join(" ").trim();
+
+                lines.push("- " + (nm || "Medlem") + (showDob ? (" (" + showDob + ")") : ""));
+              }
+            }
+          }
+        }
+      } catch (eFamPaid) {}
+      // [HELP:MAIL_PAID_FAMILY_LIST] END
+
+
+
+      if (memberCode) {
+        lines.push("");
+        lines.push("Din personlige adgangskode til medlemslogin:");
+        lines.push(memberCode);
+        lines.push("");
+        lines.push("Medlemslogin: https://humlumdartklub.com/medlemslogin");
+
+      } else {
+        lines.push("");
+        lines.push("Medlemslogin: https://humlumdartklub.com/medlemslogin");
+
+        lines.push("Adgangskode: du får den udleveret, hvis/ når den er relevant for dit medlemskab.");
+      }
+
+      lines.push("");
+      lines.push("Har du spørgsmål eller skal noget rettes, så svar bare på denne mail.");
+      lines.push("");
+      lines.push("Vi ses ved skiven 🎯");
+      lines.push("");
+      lines.push("Humlum Dartklub");
+      lines.push("Fællesskab & Præcision som kan mærkes");
+
+      MailApp.sendEmail({
+        to: memberEmail,
+        subject: subject,
+        body: lines.join("\n"),
+        replyTo: clubEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentMember = true;
+    }
+  } catch (e1) {}
+
+  // Notifikation til klub
+  try {
+    if (clubEmail) {
+      var s = "Indmelding markeret betalt – " + fullName + (memberId ? (" (" + memberId + ")") : "");
+      var cLines = [];
+      cLines.push("Indmelding markeret som betalt.");
+      cLines.push("");
+      cLines.push("Navn: " + fullName);
+      if (memberId) cLines.push("Medlemsnummer: " + memberId);
+      if (memberEmail) cLines.push("E-mail: " + memberEmail);
+      if (packageTitle) cLines.push("Medlemskab: " + packageTitle + (price ? (" (" + price + ")") : ""));
+      if (paymentMethod) cLines.push("Betaling: " + paymentMethod);
+      if (memberCode) cLines.push("member_code: " + memberCode);
+
+      MailApp.sendEmail({
+        to: clubEmail,
+        subject: s,
+        body: cLines.join("\n"),
+        replyTo: memberEmail || undefined,
+        name: "Humlum Dartklub"
+      });
+
+      sentClub = true;
+    }
+  } catch (e2) {}
+
+  return { sentMember: sentMember, sentClub: sentClub, member_id: memberId, member_code: memberCode };
+}
+/*******************************
+ * [HELP:MAIL_PAID] END
+ *******************************/
+// [HELP:ARCADE_GAS] START
+function arcadeKeyOk_(e) {
+  const key = (e && e.parameter && e.parameter.key) ? e.parameter.key : "";
+  const sp = PropertiesService.getScriptProperties().getProperty("ADMIN_TOKEN") || "";
+  return !!(key && (String(key).trim() === String(ADMIN_KEY).trim() || (sp && String(key).trim() === String(sp).trim())));
+}
+
+// ARCADE: log købte forsøg (til arkiv + lodtrækning)
+function arcadePurchase_(e) {
+  if (!arcadeKeyOk_(e)) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const body = JSON.parse(e.postData && e.postData.contents ? e.postData.contents : "{}");
+
+  const ss = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID")
+  );
+  const sh = ss.getSheetByName("ARCADE_PURCHASES");
+  if (!sh) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Missing sheet tab ARCADE_PURCHASES" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const purchaseId = body.purchase_id || ("P-" + Utilities.getUuid());
+  const purchased = Math.max(1, Number(body.purchased_attempts || 1));
+
+  sh.appendRow([
+    body.created_at || new Date().toISOString(),
+    purchaseId,
+    body.event_code || "",
+    body.event_date || "",
+    body.player_code || "",
+    body.full_name || "",
+    body.nickname || "",
+    purchased,
+    body.device_hash || "",
+    body.source || "hdk-arcade"
+  ]);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, purchase_id: purchaseId }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ARCADE: træk vinder blandt alle købte forsøg (tickets)
+function arcadeDraw_(e) {
+  if (!arcadeKeyOk_(e)) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const body = JSON.parse(e.postData && e.postData.contents ? e.postData.contents : "{}");
+  const eventCode = String(body.event_code || "").trim();
+  if (!eventCode) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Missing event_code" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const ss = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID")
+  );
+  const shEvents = ss.getSheetByName("ARCADE_EVENTS");
+  const shPurch = ss.getSheetByName("ARCADE_PURCHASES");
+  if (!shEvents) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Missing sheet tab ARCADE_EVENTS" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (!shPurch) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Missing sheet tab ARCADE_PURCHASES" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const evValues = shEvents.getDataRange().getValues();
+  const evHead = evValues[0] || [];
+  const idxCode = evHead.indexOf("event_code");
+  const idxWinner = evHead.indexOf("draw_winner_nickname");
+  const idxNote = evHead.indexOf("draw_winner_note");
+  const idxDrawnAt = evHead.indexOf("draw_drawn_at");
+  const idxStatus = evHead.indexOf("draw_status");
+  const idxSeed = evHead.indexOf("draw_seed");
+
+  if (idxCode < 0) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "ARCADE_EVENTS missing header event_code" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  let evRow = -1;
+  for (let r = 1; r < evValues.length; r++) {
+    if (String(evValues[r][idxCode] || "").trim() === eventCode) {
+      evRow = r + 1; // 1-indexed sheet row
+      break;
+    }
+  }
+  if (evRow < 0) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Event not found: " + eventCode }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const pValues = shPurch.getDataRange().getValues();
+  const pHead = pValues[0] || [];
+  const pIdxEvent = pHead.indexOf("event_code");
+  const pIdxNick = pHead.indexOf("nickname");
+  const pIdxBought = pHead.indexOf("purchased_attempts");
+
+  if (pIdxEvent < 0 || pIdxNick < 0 || pIdxBought < 0) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "ARCADE_PURCHASES missing required headers" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  let total = 0;
+  const buckets = []; // {nickname, count}
+  for (let r = 1; r < pValues.length; r++) {
+    if (String(pValues[r][pIdxEvent] || "").trim() !== eventCode) continue;
+    const nick = String(pValues[r][pIdxNick] || "").trim() || "Anonym";
+    const cnt = Math.max(1, Number(pValues[r][pIdxBought] || 1));
+    total += cnt;
+    buckets.push({ nickname: nick, count: cnt });
+  }
+
+  if (total <= 0) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "No purchases for event" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // seed: hvis du vil have reproducérbart lodtrækning
+  const seedStr = String(body.draw_seed || "").trim();
+  let seed = seedStr ? seedStr : (new Date().toISOString());
+  // enkel pseudo-random fra seed
+  function hash_(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0);
+  }
+  let rnd = hash_(seed) / 4294967296;
+  const pick = Math.floor(rnd * total) + 1; // 1..total
+
+  let acc = 0;
+  let winner = "";
+  for (let i = 0; i < buckets.length; i++) {
+    acc += buckets[i].count;
+    if (pick <= acc) {
+      winner = buckets[i].nickname;
+      break;
+    }
+  }
+
+  const drawnAt = new Date().toISOString();
+  const note = "Trukket blandt " + total + " købte forsøg · ticket #" + pick;
+
+  if (idxWinner >= 0) shEvents.getRange(evRow, idxWinner + 1).setValue(winner);
+  if (idxNote >= 0) shEvents.getRange(evRow, idxNote + 1).setValue(note);
+  if (idxDrawnAt >= 0) shEvents.getRange(evRow, idxDrawnAt + 1).setValue(drawnAt);
+  if (idxStatus >= 0) shEvents.getRange(evRow, idxStatus + 1).setValue("DRAWN");
+  if (idxSeed >= 0) shEvents.getRange(evRow, idxSeed + 1).setValue(seed);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, event_code: eventCode, total_tickets: total, ticket: pick, winner_nickname: winner, drawn_at: drawnAt, note: note, seed: seed }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function arcadeSubmit_(e) {
+  if (!arcadeKeyOk_(e)) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const body = JSON.parse(e.postData && e.postData.contents ? e.postData.contents : "{}");
+
+  const ss = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID")
+  );
+  const sh = ss.getSheetByName("ARCADE_SCORES");
+  if (!sh) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "Missing sheet tab ARCADE_SCORES" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  sh.appendRow([
+    body.created_at || new Date().toISOString(),
+    body.nickname || "Anonym",
+    body.game || "",
+    Number(body.value || 0),
+    body.meta_json || "{}",
+    body.device_hash || "",
+    body.source || "hdk-arcade"
+  ]);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function arcadeLeaderboard_(e) {
+  if (!arcadeKeyOk_(e)) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const game = (e.parameter && e.parameter.game) ? String(e.parameter.game) : "";
+
+  const ss = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID")
+  );
+  const sh = ss.getSheetByName("ARCADE_SCORES");
+  if (!sh) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true, items: [] }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const values = sh.getDataRange().getValues();
+  const headers = values.shift() || [];
+
+  const idx = {};
+  headers.forEach((h, i) => idx[String(h)] = i);
+
+  const items = values
+    .map(r => ({
+      created_at: r[idx.created_at],
+      nickname: r[idx.nickname],
+      game: r[idx.game],
+      value: r[idx.value],
+    }))
+    .filter(x => !game || x.game === game);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, items }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+// [HELP:ARCADE_GAS] END
+
+/**************************************
+ * GALLERY / ALBUM HELPERS
+ **************************************/
+function strv_(v) {
+  return (v === undefined || v === null) ? "" : String(v).trim();
+}
+
+function boolYesNo_(v, fallback) {
+  var s = strv_(v).toLowerCase();
+  if (!s && fallback !== undefined) return boolYesNo_(fallback);
+
+  if (s === "yes" || s === "ja" || s === "true" || s === "1") return "YES";
+  if (s === "no" || s === "nej" || s === "false" || s === "0") return "NO";
+
+  return s ? String(v).toUpperCase() : "";
+}
+
+function slugifyDa_(value) {
+  var s = strv_(value).toLowerCase();
+  s = s.replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa");
+  s = s.replace(/[^a-z0-9]+/g, "-");
+  s = s.replace(/^-+|-+$/g, "");
+  return s;
+}
+
+function normalizeAlbumKey_(value) {
+  return slugifyDa_(value).replace(/-/g, "_");
+}
+
+function albumKeyToTitle_(value) {
+  var raw = strv_(value).toLowerCase();
+
+  var map = {
+    "traening": "Træning",
+    "ungdom": "Ungdom",
+    "turnering": "Turnering",
+    "events": "Events",
+    "sommerfest": "Sommerfest",
+    "holdturnering": "Holdturnering",
+    "aabningsdag": "Åbningsdag",
+    "klubhus": "Klubhus",
+    "andet": "Andet"
+  };
+
+  if (map[raw]) return map[raw];
+
+  var s = strv_(value).replace(/[_-]+/g, " ");
+  if (!s) return "";
+  return s.replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+}
+
+function headerIdx_(headers, name) {
+  return headers.indexOf(name);
+}
+
+function getByHeader_(headers, rowValues, name) {
+  var idx = headerIdx_(headers, name);
+  return idx === -1 ? "" : rowValues[idx];
+}
+
+function setByHeader_(headers, rowValues, name, value) {
+  var idx = headerIdx_(headers, name);
+  if (idx !== -1) rowValues[idx] = value;
+}
+
+function isYesLike_(v) {
+  var s = strv_(v).toLowerCase();
+  return s === "yes" || s === "ja" || s === "true" || s === "1";
+}
+
+function applyGalleryRowDefaults_(headers, rowValues) {
+  var albumKey = strv_(getByHeader_(headers, rowValues, "album_key"));
+  var category = strv_(getByHeader_(headers, rowValues, "category"));
+  var title = strv_(getByHeader_(headers, rowValues, "title"));
+  var key = strv_(getByHeader_(headers, rowValues, "key"));
+  var altText = strv_(getByHeader_(headers, rowValues, "alt_text"));
+  var type = strv_(getByHeader_(headers, rowValues, "type"));
+  var source = strv_(getByHeader_(headers, rowValues, "source"));
+  var visible = getByHeader_(headers, rowValues, "visible");
+  var order = strv_(getByHeader_(headers, rowValues, "order"));
+
+  if (!albumKey) albumKey = normalizeAlbumKey_(category || title || key || "andet");
+  if (!category) category = albumKeyToTitle_(albumKey) || "Andet";
+  if (!title) title = "Galleri-billede";
+  if (!altText) altText = title;
+  if (!type) type = "image";
+  if (!source) source = "admin";
+  if (!strv_(visible)) visible = "YES";
+  if (!order) order = String(new Date().getTime());
+
+  setByHeader_(headers, rowValues, "album_key", albumKey);
+  setByHeader_(headers, rowValues, "category", category);
+  setByHeader_(headers, rowValues, "title", title);
+  setByHeader_(headers, rowValues, "alt_text", altText);
+  setByHeader_(headers, rowValues, "type", type);
+  setByHeader_(headers, rowValues, "source", source);
+  setByHeader_(headers, rowValues, "visible", boolYesNo_(visible, "YES"));
+  setByHeader_(headers, rowValues, "order", order);
+}
+
+function applyGalleryAlbumDefaults_(headers, rowValues) {
+  var albumKey = strv_(getByHeader_(headers, rowValues, "album_key"));
+  var title = strv_(getByHeader_(headers, rowValues, "title"));
+  var slug = strv_(getByHeader_(headers, rowValues, "slug"));
+  var visible = getByHeader_(headers, rowValues, "visible");
+  var source = strv_(getByHeader_(headers, rowValues, "source"));
+  var order = strv_(getByHeader_(headers, rowValues, "order"));
+
+  if (!albumKey) albumKey = normalizeAlbumKey_(title || slug || "album");
+  if (!title) title = albumKeyToTitle_(albumKey) || "Album";
+  if (!slug) slug = slugifyDa_(title || albumKey);
+  if (!strv_(visible)) visible = "YES";
+  if (!source) source = "admin";
+  if (!order) order = "999";
+
+  setByHeader_(headers, rowValues, "album_key", albumKey);
+  setByHeader_(headers, rowValues, "title", title);
+  setByHeader_(headers, rowValues, "slug", slug);
+  setByHeader_(headers, rowValues, "visible", boolYesNo_(visible, "YES"));
+  setByHeader_(headers, rowValues, "source", source);
+  setByHeader_(headers, rowValues, "order", order);
+}
+
+
+/**************************************
+ * SPONSORVÆG V2
+ * - tilføjer felter til SPONSORER
+ * - migrerer eksisterende data én gang
+ **************************************/
+function sponsorWallSetup_() {
+  var sheet = getSheetByName("SPONSORER");
+  if (!sheet) throw new Error("Unknown tab: SPONSORER");
+
+  var wanted = ["wall_title", "wall_subtitle", "wall_extra", "wall_show_extra", "wall_kind", "wall_category", "wall_lane", "wall_visible", "wall_order"];
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v) {
+    return String(v || "").trim();
+  });
+
+  wanted.forEach(function(name) {
+    if (headers.indexOf(name) === -1) {
+      lastCol += 1;
+      sheet.getRange(1, lastCol).setValue(name);
+      headers.push(name);
+    }
+  });
+
+  var info = getHeaderMap(sheet);
+  headers = info.headers;
+  lastCol = info.lastCol;
+  var map = info.map || {};
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow >= 2) {
+    var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    function sval(v) { return String(v === undefined || v === null ? "" : v).trim(); }
+    function firstLine(v) {
+      var parts = sval(v).split(/\r?\n/);
+      for (var i = 0; i < parts.length; i++) {
+        var x = sval(parts[i]);
+        if (x) return x;
+      }
+      return "Sponsor";
+    }
+    function yesNo(v) {
+      var s = sval(v).toLowerCase();
+      if (s === "no" || s === "nej" || s === "false" || s === "0") return "NO";
+      return "YES";
+    }
+    function laneFrom(note) {
+      var m = sval(note).match(/(?:ønsket\s*bane|bane\s*sponsor|banesponsor)[^0-9]{0,20}(\d{1,2})/i);
+      return m ? Number(m[1]) : "";
+    }
+    function categoryFrom(row) {
+      var note = map.note !== undefined ? sval(row[map.note]) : "";
+      var level = map.level !== undefined ? sval(row[map.level]).toLowerCase() : "";
+      if (/pakke\s*:\s*guld/i.test(note) || /guld|gold/.test(level)) return "gold";
+      if (laneFrom(note)) return "lane";
+      if (/pakke\s*:\s*(bronze|sølv|solv)/i.test(note) || /bronze|sølv|solv|støtte|stoette/.test(level)) return "support";
+      return "support";
+    }
+
+    for (var r = 0; r < values.length; r++) {
+      var row = values[r];
+      var name = map.name !== undefined ? row[map.name] : "";
+      var note = map.note !== undefined ? row[map.note] : "";
+      var visible = map.visible !== undefined ? row[map.visible] : "YES";
+      var order = map.order !== undefined ? row[map.order] : (r + 1);
+
+      if (map.wall_title !== undefined && !sval(row[map.wall_title])) row[map.wall_title] = firstLine(name);
+      if (map.wall_show_extra !== undefined && !sval(row[map.wall_show_extra])) row[map.wall_show_extra] = "YES";
+      if (map.wall_kind !== undefined && !sval(row[map.wall_kind])) row[map.wall_kind] = "sponsor";
+      if (map.wall_category !== undefined && !sval(row[map.wall_category])) row[map.wall_category] = categoryFrom(row);
+      if (map.wall_lane !== undefined && !sval(row[map.wall_lane])) row[map.wall_lane] = laneFrom(note);
+      if (map.wall_visible !== undefined && !sval(row[map.wall_visible])) row[map.wall_visible] = yesNo(visible);
+      if (map.wall_order !== undefined && !sval(row[map.wall_order])) row[map.wall_order] = order;
+    }
+
+    sheet.getRange(2, 1, values.length, lastCol).setValues(values);
+  }
+
+  sponsorWallCtaSetup_();
+  return { ok: true, tab: "SPONSORER", headers: wanted };
+}
+
+
+
+function sponsorWallCtaSetup_() {
+  var sheet = getSheetByName("SPONSORVAEG_TEKST");
+  if (!sheet) throw new Error("Unknown tab: SPONSORVAEG_TEKST");
+
+  var wanted = ["cta_visible", "cta_title", "cta_text", "cta_button", "cta_button_visible", "cta_link", "cta_tv_visible", "cta_tv_size"];
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v) { return String(v || "").trim(); });
+
+  wanted.forEach(function(name) {
+    if (headers.indexOf(name) === -1) {
+      lastCol += 1;
+      sheet.getRange(1, lastCol).setValue(name);
+      headers.push(name);
+    }
+  });
+
+  var info = getHeaderMap(sheet);
+  var map = info.map || {};
+  if (sheet.getLastRow() < 2) sheet.getRange(2, 1).setValue("");
+
+  var row = sheet.getRange(2, 1, 1, info.lastCol).getValues()[0];
+  function fill(name, value) {
+    if (map[name] !== undefined && String(row[map[name]] || "").trim() === "") row[map[name]] = value;
+  }
+  fill("cta_visible", "YES");
+  fill("cta_title", "Vil du også støtte Humlum Dartklub?");
+  fill("cta_text", "Dit navn eller virksomhedslogo kan stå her.");
+  fill("cta_button", "Bliv støtte");
+  fill("cta_button_visible", "YES");
+  fill("cta_link", "/sponsor");
+  fill("cta_tv_visible", "YES");
+  fill("cta_tv_size", "large");
+  sheet.getRange(2, 1, 1, info.lastCol).setValues([row]);
+  SpreadsheetApp.flush();
+  return { ok: true, tab: "SPONSORVAEG_TEKST" };
+}
+
+function sponsorWallUpdateCta_(body) {
+  sponsorWallCtaSetup_();
+  var sheet = getSheetByName("SPONSORVAEG_TEKST");
+  var info = getHeaderMap(sheet);
+  var map = info.map || {};
+  var rowNumber = 2;
+  var row = sheet.getRange(rowNumber, 1, 1, info.lastCol).getValues()[0];
+  var allowed = ["cta_visible", "cta_title", "cta_text", "cta_button", "cta_button_visible", "cta_link", "cta_tv_visible", "cta_tv_size"];
+  allowed.forEach(function(name) {
+    if (map[name] !== undefined && body && Object.prototype.hasOwnProperty.call(body, name)) row[map[name]] = body[name];
+  });
+  sheet.getRange(rowNumber, 1, 1, info.lastCol).setValues([row]);
+  SpreadsheetApp.flush();
+  return { ok: true, row: rowNumber };
+}
+
+function sponsorWallUpdateRow_(rowNumber, body) {
+  var sheet = getSheetByName("SPONSORER");
+  if (!sheet) throw new Error("Unknown tab: SPONSORER");
+
+  // Sørg for at sponsorvæg-kolonnerne findes.
+  sponsorWallSetup_();
+
+  var info = getHeaderMap(sheet);
+  var headers = info.headers;
+  var map = info.map || {};
+  var lastCol = info.lastCol;
+  var rowValues = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+
+  var allowed = [
+    "wall_title", "wall_subtitle", "wall_extra", "wall_show_extra", "wall_kind",
+    "wall_category", "wall_lane", "wall_visible", "wall_order", "featured"
+  ];
+
+  allowed.forEach(function(name) {
+    if (map[name] !== undefined && body && Object.prototype.hasOwnProperty.call(body, name)) {
+      rowValues[map[name]] = body[name];
+    }
+  });
+
+  sheet.getRange(rowNumber, 1, 1, lastCol).setValues([rowValues]);
+  SpreadsheetApp.flush();
+
+  var saved = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+  var item = { _row: rowNumber };
+  headers.forEach(function(h, i) { if (h) item[h] = saved[i]; });
+
+  return {
+    ok: true,
+    row: rowNumber,
+    item: item,
+    verified_wall_lane: map.wall_lane !== undefined ? saved[map.wall_lane] : ""
+  };
+}
+
+function sponsorWallRepairLanes_() {
+  var sheet = getSheetByName("SPONSORER");
+  if (!sheet) throw new Error("Unknown tab: SPONSORER");
+  sponsorWallSetup_();
+
+  var info = getHeaderMap(sheet);
+  var map = info.map || {};
+  var lastCol = info.lastCol;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, updated: 0 };
+
+  if (map.wall_lane === undefined || map.note === undefined) {
+    throw new Error("SPONSORER mangler wall_lane eller note");
+  }
+
+  var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var updated = 0;
+
+  function sval(v) { return String(v === undefined || v === null ? "" : v).trim(); }
+  function laneFrom(note) {
+    var m = sval(note).match(/(?:ønsket\s*bane|bane\s*sponsor|banesponsor)[^0-9]{0,20}(\d{1,2})/i);
+    return m ? Number(m[1]) : "";
+  }
+
+  for (var r = 0; r < values.length; r++) {
+    var lane = laneFrom(values[r][map.note]);
+    if (!lane) continue;
+    values[r][map.wall_lane] = lane;
+    if (map.wall_category !== undefined) values[r][map.wall_category] = "lane";
+    updated++;
+  }
+
+  sheet.getRange(2, 1, values.length, lastCol).setValues(values);
+  SpreadsheetApp.flush();
+  return { ok: true, updated: updated };
+}
+
+/**************************************
+ * ENTRYPOINTS
+ **************************************/
+
+function doGet(e) {
+  try {
+    var params = (e && e.parameter) || {};
+
+    // Support both ?tab= and legacy ?sheet=
+    var tab = (params && (params.tab || params.sheet)) ? String(params.tab || params.sheet).trim() : "";
+    var tabKey = tab ? tab.toUpperCase() : "";
+
+    var limit = parseInt((params && params.limit) || "200", 10);
+    if (isNaN(limit) || limit < 1) limit = 200;
+    if (limit > 2000) limit = 2000;
+
+    var key = (params && params.key) ? String(params.key).trim() : "";
+    var action = (params && params.action) ? String(params.action).trim().toLowerCase() : "";
+
+    params.key = key; // så arcadeKeyOk_ stadig kan læse key
+
+    if (action === "arcadeleaderboard") {
+      return arcadeLeaderboard_(e);
+    }
+
+    if (!tab) return jsonError("Missing tab parameter");
+
+    // Tabs som må hentes af website
+var PUBLIC_TABS = [
+  "KLUBINFO",
+  "TICKER",
+  "NYHEDER",
+  "EVENTS",
+  "HERO",
+  "MEDIA",
+  "OM_KLUBBEN",
+  "FORSIDE",
+  "MEDLEMSPAKKER",
+  "SPONSORPAKKER",
+  "SPONSOR_TILKOEB",
+  "SPONSOR_STOET",
+  "PROEVETRAENING",
+  "SPONSORER",
+  "VENNER",
+  "SPONSORVAEG_TEKST",
+  "BANESPONSOR_BANER",
+  "ARCADE_EVENTS",
+  "GALLERI",
+  "GALLERI_ALBUMS"
+];
+
+    var adminTokenProp = "";
+    try {
+      adminTokenProp = String(PropertiesService.getScriptProperties().getProperty("ADMIN_TOKEN") || "").trim();
+    } catch (eAdminToken) {
+      adminTokenProp = "";
+    }
+
+    var isPublic = PUBLIC_TABS.indexOf(tabKey) !== -1;
+    var isAdmin = !!(
+      key &&
+      (
+        key === String(ADMIN_KEY).trim() ||
+        (adminTokenProp && key === adminTokenProp)
+      )
+    );
+
+    if (!isPublic && !isAdmin) {
+      return jsonResponse({ ok: false, error: "Unauthorized", tab: tab });
+    }
+
+    var sheet = getSheetByName(tab);
+    if (!sheet) return jsonError("Unknown tab: " + tab);
+
+    var items = readSheetAsObjects(sheet, limit);
+
+    // Offentlig adgang til galleri-tabs må kun se synlige rækker
+    if (!isAdmin && (tabKey === "GALLERI" || tabKey === "GALLERI_ALBUMS")) {
+      items = items.filter(function(item) {
+        return isYesLike_(item && item.visible);
+      });
+    }
+
+    return jsonResponse({ ok: true, tab: tab, items: items });
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+function doPost(e) {
+  try {
+    var params = (e && e.parameter) || {};
+
+    // JSON-body hvis muligt
+    var body = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (parseErr) {
+        body = {};
+      }
+    }
+
+       // Læs action/tab/key – body har førsteprioritet
+    var action = (
+      (body && body.action) ||
+      (params && params.action) ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    // VIGTIGT:
+    // admin-key skal læses fra query params først,
+    // så body.key kan bruges som feltværdi i fx GALLERI.
+    var key =
+      (params && params.key) ||
+      (body && body.key) ||
+      "";
+
+    var tab =
+      (body && body.tab) ||
+      (params && params.tab) ||
+      "";
+  // [HELP:ARCADE_GAS_ENTRY] START
+  // action er lowercased i din kode, så "arcadeSubmit" bliver til "arcadesubmit"
+  if (action === "arcadesubmit") {
+    // BRUG samme admin-key check som du bruger til andre write-actions
+    // (fx markPaid, admin updates osv.)
+    // Eksempel (tilpas til din eksisterende validate-funktion):
+    // if (!isValidAdminKey_(key)) return jsonError("Unauthorized");
+
+    const tabName = "ARCADE_SCORES";
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sh = ss.getSheetByName(tabName);
+    if (!sh) return jsonError("Missing sheet: " + tabName);
+
+    const p = body || {};
+    sh.appendRow([
+      p.created_at || new Date().toISOString(),
+      p.nickname || "Anonym",
+      p.game || "nine",
+      Number(p.value || 0),
+      p.meta_json || "{}",
+      p.device_hash || "",
+      p.source || "hdk-arcade",
+    ]);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  // [HELP:ARCADE_GAS_ENTRY] END
+
+// [HELP:ARCADE_SUBMIT] START
+if (action === "arcadesubmit") {
+  // Brug din eksisterende ADMIN_KEY (den står i toppen af filen)
+  if (!key || String(key).trim() !== String(ADMIN_KEY).trim()) {
+    return jsonResponse({ ok: false, error: "Unauthorized" });
+  }
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName("ARCADE_SCORES");
+  if (!sh) return jsonResponse({ ok: false, error: "Missing sheet tab ARCADE_SCORES" });
+
+  var p = body || {};
+  sh.appendRow([
+    p.created_at || new Date().toISOString(),
+    p.nickname || "Anonym",
+    p.game || "nine",
+    Number(p.value || 0),
+    p.meta_json || "{}",
+    p.device_hash || "",
+    p.source || "hdk-arcade"
+  ]);
+
+  return jsonResponse({ ok: true });
+}
+// [HELP:ARCADE_SUBMIT] END
+
+    /*************** memberlogin (offentlig medlems-login) ***************/
+// [HELP:MEMBER:LOGIN] START
+if (action === "memberlogin") {
+  var tz = (typeof TIMEZONE !== "undefined" && TIMEZONE) ? TIMEZONE : Session.getScriptTimeZone();
+
+  var emailIn = ((body && body.email) || (params && params.email) || "")
+    .toString().trim().toLowerCase();
+  var codeIn = ((body && body.code) || (params && params.code) || "")
+    .toString().trim();
+
+  if (!emailIn || !codeIn) return jsonResponse({ ok: false, error: "Indtast både email og kode." });
+
+  var sheetM = getSheetByName("MEDLEMMER");
+  if (!sheetM) return jsonError("Unknown tab: MEDLEMMER");
+
+  var headerInfoM = getHeaderMap(sheetM);
+  var mapM = headerInfoM.map || {};
+
+  var idxEmail = mapM["email"];
+  var idxCode = mapM["member_code"];
+  var idxStatus = mapM["status"];
+  var idxEnd = mapM["end_date"]; // kan være tom
+  var idxMemberId = mapM["member_id"];
+  var idxFirst = mapM["first_name"];
+  var idxLast = mapM["last_name"];
+
+  if (idxEmail === undefined || idxCode === undefined || idxStatus === undefined || idxMemberId === undefined) {
+    return jsonError("MEDLEMMER mangler required kolonner: email/member_code/status/member_id");
+  }
+
+  var todayYMD = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+
+  function normalizeCode_(v) {
+    if (v === undefined || v === null) return "";
+    if (typeof v === "number" && isFinite(v)) return String(Math.round(v));
+    return String(v).trim();
+  }
+
+  function toYMD_(v) {
+    if (!v) return "";
+    if (Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime())) {
+      return Utilities.formatDate(v, tz, "yyyy-MM-dd");
+    }
+    var s = String(v).trim();
+    if (!s) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    return "";
+  }
+
+  function isActive_(v) {
+    return String(v || "").trim().toLowerCase() === "active";
+  }
+
+  var codeNormIn = normalizeCode_(codeIn);
+  var codeNumIn = parseInt(codeIn, 10);
+
+  var values = sheetM.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r] || [];
+    var rowEmail = String(row[idxEmail] || "").trim().toLowerCase();
+    if (!rowEmail || rowEmail !== emailIn) continue;
+
+    var rowCodeNorm = normalizeCode_(row[idxCode]);
+    var rowCodeNum = parseInt(rowCodeNorm, 10);
+    var codeOk =
+      (rowCodeNorm && rowCodeNorm === codeNormIn) ||
+      (!isNaN(rowCodeNum) && !isNaN(codeNumIn) && rowCodeNum === codeNumIn);
+
+    if (!codeOk) return jsonResponse({ ok: false, error: "Forkert email eller kode." });
+    if (!isActive_(row[idxStatus])) return jsonResponse({ ok: false, error: "Dit medlemskab er ikke aktivt." });
+
+    var endYMD = (idxEnd !== undefined) ? toYMD_(row[idxEnd]) : "";
+    if (endYMD && endYMD < todayYMD) return jsonResponse({ ok: false, error: "Dit medlemskab er udløbet." });
+
+    var memberId = String(row[idxMemberId] || "").trim();
+    if (!memberId) return jsonResponse({ ok: false, error: "Medlemsdata mangler member_id." });
+
+    return jsonResponse({
+      ok: true,
+      member: {
+        member_id: memberId,
+        email: rowEmail,
+        first_name: idxFirst !== undefined ? String(row[idxFirst] || "").trim() : "",
+        last_name: idxLast !== undefined ? String(row[idxLast] || "").trim() : ""
+      }
+    });
+  }
+
+  return jsonResponse({ ok: false, error: "Forkert email eller kode." });
+}
+// [HELP:MEMBER:LOGIN] END
+
+
+
+    /*************** join (offentlig tilmelding) ***************/
+    if (action === "join") {
+      var joinTab = tab || "INDMELDINGER";
+      var res = createRowFromBody(joinTab, body);
+
+      // Brug både body (payload) og sheet-item (gemte felter) til emails,
+      // så vi får med f.eks. birth_date + postcode selv hvis kolonnen ikke findes i arket endnu.
+      var mailItem = {};
+      for (var k in body) mailItem[k] = body[k];
+      for (var k2 in res.item) mailItem[k2] = res.item[k2];
+
+      var mailInfo = { sentMember: false, sentClub: false };
+      try {
+        mailInfo = sendJoinEmails_(mailItem, joinTab) || mailInfo;
+      } catch (mailErr) {
+        mailInfo = { sentMember: false, sentClub: false };
+      }
+
+      return jsonResponse({
+        ok: true,
+        tab: joinTab,
+        row: res.row,
+        item: res.item,
+        mail: mailInfo
+      });
+    }
+
+     /*************** sponsor (offentlig sponsor-tilmelding) ***************/
+    if (action === "sponsor") {
+      var sponsorTab = tab || "SPONSORER";
+      var sheetS = getSheetByName(sponsorTab);
+      if (!sheetS) return jsonError("Unknown tab: " + sponsorTab);
+
+      var headerInfo = getHeaderMap(sheetS);
+      var map = headerInfo.map;
+      var lastCol = headerInfo.lastCol;
+
+      var rowArr = new Array(lastCol);
+      for (var i = 0; i < lastCol; i++) rowArr[i] = "";
+
+      function setVal(headerName, value) {
+        if (map[headerName] !== undefined && map[headerName] !== null) {
+          rowArr[map[headerName]] = value;
+        }
+      }
+
+      var firma = ((body && body.firma) || (body && body.name) || "").toString().trim();
+      var kontakt = ((body && body.kontakt) || (body && body.contact) || "").toString().trim();
+      var email = body && body.email ? String(body.email).trim() : "";
+      var telefon = ((body && body.telefon) || (body && body.phone) || "").toString().trim();
+      var website = body && body.website ? String(body.website).trim() : "";
+      var logoUrl = body && (body.logo_url || body.logoUrl) ? String(body.logo_url || body.logoUrl).trim() : "";
+      var level =
+        (body && (body.level || body.package_title || body.pakke || body.package_id)) ?
+          String(body.level || body.package_title || body.pakke || body.package_id).trim() :
+          "";
+
+      var kommentar =
+        ((body && body.kommentar) ||
+         (body && body.comment) ||
+         "").toString().trim();
+
+      // Grunddata (understøt både danske og engelske kolonnenavne)
+      setVal("name", firma);
+      setVal("firma", firma);
+      setVal("contact", kontakt);
+      setVal("kontakt", kontakt);
+      setVal("email", email);
+      setVal("phone", telefon);
+      setVal("telefon", telefon);
+      setVal("website", website);
+      setVal("logo_url", logoUrl);
+      setVal("level", level);
+      setVal("pakke", level);
+
+      // Opsummering/bemærkning fra formularen
+      if (kommentar) {
+        setVal("note", kommentar);
+        setVal("bemærkning", kommentar);
+      }
+
+      // Synlighed og rækkefølge
+      if (map["visible"] !== undefined && map["visible"] !== null) {
+        if (rowArr[map["visible"]] === undefined || rowArr[map["visible"]] === null || rowArr[map["visible"]] === "") {
+          rowArr[map["visible"]] = false;
+        }
+      }
+      if (map["order"] !== undefined && map["order"] !== null) {
+        if (rowArr[map["order"]] === undefined || rowArr[map["order"]] === null || rowArr[map["order"]] === "") {
+          rowArr[map["order"]] = 9999;
+        }
+      }
+
+      sheetS.appendRow(rowArr);
+      var newRow = sheetS.getLastRow();
+
+      var mailInfoSponsor = { sentClub: false };
+      try {
+        mailInfoSponsor = sendSponsorEmails_(body) || mailInfoSponsor;
+      } catch (mailErrSponsor) {
+        mailInfoSponsor = { sentClub: false };
+      }
+
+      return jsonResponse({
+        ok: true,
+        tab: sponsorTab,
+        row: newRow,
+        item: {
+          name: firma,
+          level: level,
+          contact: kontakt,
+          email: email,
+          phone: telefon,
+          website: website,
+          logo_url: logoUrl,
+          visible: false
+        },
+        mail: mailInfoSponsor
+      });
+    }
+
+    /*************** tryout (offentlig prøvetrænings-booking) ***************/
+    if (action === "tryout") {
+      var payloadTryout = {
+        date: (body && body.date) ? String(body.date).trim() : "",
+        time: (body && body.time) ? String(body.time).trim() : "",
+        name: (body && (body.name || body.navn)) ? String(body.name || body.navn).trim() : "",
+        email: (body && body.email) ? String(body.email).trim() : "",
+        phone: (body && (body.phone || body.telefon)) ? String(body.phone || body.telefon).trim() : "",
+        note: (body && (body.note || body.bemærkning || body.comment)) ? String(body.note || body.bemærkning || body.comment).trim() : ""
+      };
+
+      var mailInfoTryout = { sentMember: false, sentClub: false };
+      try {
+        mailInfoTryout = sendTryoutEmails_(payloadTryout) || mailInfoTryout;
+      } catch (mailErrTryout) {
+        mailInfoTryout = { sentMember: false, sentClub: false };
+      }
+
+      return jsonResponse({
+        ok: true,
+        action: "tryout",
+        mail: mailInfoTryout
+      });
+    }
+
+
+
+    /*************** sponsorWallSetup (admin, én gangs migration) ***************/
+    if (action === "sponsorwallsetup") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+      return jsonResponse(sponsorWallSetup_());
+    }
+
+    if (action === "sponsorwallupdaterow") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+      var swRow = parseInt((body && body.row) || (params && params.row) || "", 10);
+      if (!swRow || swRow < 2) return jsonError("Invalid sponsor row");
+      return jsonResponse(sponsorWallUpdateRow_(swRow, body || {}));
+    }
+
+    if (action === "sponsorwallupdatecta") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+      return jsonResponse(sponsorWallUpdateCta_(body || {}));
+    }
+
+    if (action === "sponsorwallrepairlanes") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+      return jsonResponse(sponsorWallRepairLanes_());
+    }
+
+    /*************** adminCreateRow (admin generisk append) ***************/
+    if (action === "admincreaterow") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+
+      var tabNameCreate = tab || "";
+      if (!tabNameCreate)
+        return jsonError("Missing tab parameter for adminCreateRow");
+
+      var sheetCreate = getSheetByName(tabNameCreate);
+      if (!sheetCreate) return jsonError("Unknown tab: " + tabNameCreate);
+
+      var resCreate = createRowFromBody(tabNameCreate, body);
+      resCreate.ok = true;
+      return jsonResponse(resCreate);
+    }
+
+    /*************** adminUpdateRow (admin generisk edit) ***************/
+    if (action === "adminupdaterow") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+
+      var rowAdmin = (body && body.row) || (params && params.row);
+      if (!rowAdmin)
+        return jsonError("Missing row parameter for adminUpdateRow");
+
+      var rowNumberAdmin = parseInt(rowAdmin, 10);
+      if (!rowNumberAdmin || rowNumberAdmin < 2)
+        return jsonError("Invalid row: " + rowAdmin);
+
+      var tabNameAdmin = tab || "";
+      if (!tabNameAdmin)
+        return jsonError("Missing tab parameter for adminUpdateRow");
+
+      var sheetAdmin = getSheetByName(tabNameAdmin);
+      if (!sheetAdmin) return jsonError("Unknown tab: " + tabNameAdmin);
+
+      var resAdmin = adminUpdateRow(sheetAdmin, rowNumberAdmin, body);
+      resAdmin.ok = true;
+      return jsonResponse(resAdmin);
+    }
+
+    /*************** markPaid (admin) ***************/
+    if (action === "markpaid") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+
+      var row =
+        (body && body.row) ||
+        (params && params.row) ||
+        "";
+      if (!row) return jsonError("Missing row parameter for markPaid");
+
+      var rowNumber = parseInt(row, 10);
+      if (!rowNumber || rowNumber < 2)
+        return jsonError("Invalid row: " + row);
+
+      var method =
+        (body && body.method) ||
+        (params && params.method) ||
+        "MobilePay";
+
+      var tabName = tab || "INDMELDINGER";
+
+            var result = markPaid(tabName, rowNumber, method);
+
+      // Send velkomstmail + klub-notifikation
+      var mailInfoPaid = { sentMember: false, sentClub: false };
+      try {
+        mailInfoPaid = sendPaidEmails_(tabName, rowNumber, result.member_row, method) || mailInfoPaid;
+      } catch (eMailPaid) {
+        mailInfoPaid = { sentMember: false, sentClub: false };
+      }
+
+      result.ok = true;
+      result.mail = mailInfoPaid;
+      return jsonResponse(result);
+
+    }
+
+    /*************** rejectRow (admin) ***************/
+    if (action === "reject") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+
+      var rowReject =
+        (body && body.row) ||
+        (params && params.row) ||
+        "";
+      if (!rowReject) return jsonError("Missing row parameter for reject");
+
+      var rowNumberReject = parseInt(rowReject, 10);
+      if (!rowNumberReject || rowNumberReject < 2)
+        return jsonError("Invalid row: " + rowReject);
+
+      var tabNameReject = tab || "INDMELDINGER";
+      var resReject = rejectRow(tabNameReject, rowNumberReject);
+      resReject.ok = true;
+      return jsonResponse(resReject);
+    }
+
+    /*************** setPrimaryTeam (admin) ***************/
+    if (action === "setprimaryteam") {
+      if (key !== ADMIN_KEY) return jsonError("Invalid admin key");
+
+      var row2 =
+        (body && body.row) ||
+        (params && params.row) ||
+        "";
+      if (!row2) return jsonError("Missing row parameter for setPrimaryTeam");
+
+      var rowNumber2 = parseInt(row2, 10);
+      if (!rowNumber2 || rowNumber2 < 2)
+        return jsonError("Invalid row: " + row2);
+
+      var team =
+        (body && body.team) ||
+        (params && params.team) ||
+        "";
+      if (!team) return jsonError("Missing team parameter");
+
+      var tabName2 = tab || "MEDLEMMER";
+      var result2 = setPrimaryTeam(tabName2, rowNumber2, team);
+      result2.ok = true;
+      return jsonResponse(result2);
+    }
+
+    /*************** fallback ***************/
+    return jsonError("Unknown action: " + action);
+
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+/**************************************
+ * SPREADSHEET HELPERS
+ **************************************/
+
+function getSpreadsheet() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getSheetByName(tabName) {
+  var ss = getSpreadsheet();
+  return ss.getSheetByName(tabName);
+}
+
+/**
+ * Headers + map + last used col
+ */
+function getHeaderMap(sheet) {
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0] || [];
+  var map = {};
+
+  for (var i = 0; i < headers.length; i++) {
+    var h = (headers[i] || "").toString().trim();
+    headers[i] = h;
+    if (h) map[h] = i;
+  }
+
+  return { headers: headers, map: map, lastCol: lastCol };
+}
+
+/**
+ * Læser et ark som liste af objekter med kolonnenavne
+ * Row 1 = headers, rækker fra 2 og nedefter = data
+ */
+function readSheetAsObjects(sheet, limit) {
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  var rowsToRead = Math.min(limit || 200, lastRow - 1);
+  var values = sheet.getRange(2, 1, rowsToRead, lastCol).getValues();
+
+  var out = [];
+  for (var r = 0; r < values.length; r++) {
+    var rowArr = values[r];
+    var obj = {};
+    obj._row = r + 2;
+
+    for (var c = 0; c < headers.length; c++) {
+      var name = headers[c];
+      if (!name) continue;
+      obj[name] = rowArr[c];
+    }
+
+    out.push(obj);
+  }
+
+  return out;
+}
+
+/**************************************
+ * BUSINESS LOGIC
+ **************************************/
+
+/**
+ * Opretter ny række i ønsket tab baseret på body
+ * Matcher kolonnenavne dynamisk
+ */
+function createRowFromBody(tabName, body) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error("Unknown tab: " + tabName);
+
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  var row = [];
+  for (var i = 0; i < lastCol; i++) row.push("");
+
+  var now = new Date();
+  var nowStr = formatDate(now);
+  var tabKey = String(tabName || "").toUpperCase();
+
+  function setByName(name, value) {
+    var idx = headers.indexOf(name);
+    if (idx === -1) return;
+    row[idx] = value;
+  }
+
+  // Standard meta
+  setByName("timestamp", nowStr);
+  setByName("created_at", nowStr);
+  setByName("updated_at", nowStr);
+
+  var statusFieldIndex = headers.indexOf("status");
+  if (statusFieldIndex !== -1) {
+    row[statusFieldIndex] = (body.status || "").toString().trim() || "pending";
+  }
+
+  // Brugervenlig mapping af felter fra body → kolonner
+  for (var c = 0; c < headers.length; c++) {
+    var hName = headers[c];
+    if (!hName) continue;
+    if (row[c] !== "") continue;
+
+    var v;
+
+    switch (hName) {
+      case "key":
+        v = body.row_key || body.key;
+        break;
+
+      case "album_key":
+        v = body.album_key || body.albumKey || normalizeAlbumKey_(body.category || body.title || body.name);
+        break;
+
+      case "slug":
+        v = body.slug || body.album_slug || slugifyDa_(body.title || body.album_key || body.albumKey || body.name);
+        break;
+
+      case "cover_url":
+        v = body.cover_url || body.coverUrl;
+        break;
+
+      case "note":
+        v = body.note;
+        break;
+
+      case "first_name":
+        v = body.first_name || body.fornavn || body.firstName;
+        break;
+      case "last_name":
+        v = body.last_name || body.efternavn || body.lastName;
+        break;
+      case "navn":
+      case "name":
+        v = body.navn || body.name;
+        break;
+      case "email":
+        v = body.email;
+        break;
+      case "phone":
+      case "telefon":
+        v = body.phone || body.telefon;
+        break;
+      case "address":
+      case "adresse":
+        v = body.address || body.adresse;
+        break;
+
+      case "postcode":
+      case "zip":
+      case "postnr":
+        v = body.postcode || body.postnr || body.zip;
+        break;
+
+      case "city":
+      case "by":
+        v = body.city || body.by;
+        break;
+
+      case "package_key":
+        v = body.package_key || body.packageKey;
+        break;
+      case "package_title":
+      case "package_id":
+      case "pakke":
+        v = body.package_title || body.package_id || body.pakke;
+        break;
+
+      case "price_amount":
+        v = body.price_amount || body.pris;
+        break;
+      case "price_unit":
+        v = body.price_unit;
+        break;
+
+      case "level":
+      case "niveau":
+        v = body.level || body.niveau;
+        break;
+      case "gender":
+      case "køn":
+        v = body.gender || body.køn;
+        break;
+
+      case "birth_date":
+      case "fødselsdato":
+        v = body.birth_date || body.birthDate || body.fødselsdato || body.birthdate;
+        break;
+
+      case "birth_year":
+      case "födselsår":
+      case "fødselsår":
+        v = body.birth_year || body.birthYear || body.fødselsår;
+        if (!v) {
+          var bd = body.birth_date || body.birthDate || body.fødselsdato;
+          if (bd) {
+            var sbd = String(bd);
+            var m = sbd.match(/(\d{4})/);
+            if (m) v = m[1];
+          }
+        }
+        break;
+
+      case "remark":
+      case "bemærkning":
+        v = body.remark || body.bemærkning;
+        break;
+
+      case "form_version":
+        v = body.form_version || body.source_form_version || body.sourceFormVersion || body.source_formVersion;
+        break;
+
+      case "source":
+        v = body.source || "website";
+        break;
+
+      case "payment_method":
+        v = body.payment_method || body.method;
+        break;
+
+      case "terms_accepted":
+        v = body.terms_accepted || body.termsAccepted || body.terms;
+        break;
+      case "privacy_accepted":
+        v = body.privacy_accepted || body.privacyAccepted || body.privacy;
+        break;
+
+      case "household_size":
+        v = body.household_size || body.household || body.husstand;
+        break;
+      case "family_members_json":
+        if (body.family_members_json) v = body.family_members_json;
+        else if (body.family_members) {
+          try { v = JSON.stringify(body.family_members); } catch (eJson) { v = ""; }
+        } else {
+          v = "";
+        }
+        break;
+
+      default:
+        if (body.hasOwnProperty(hName)) {
+          v = body[hName];
+        }
+        break;
+    }
+
+    if (v !== undefined && v !== null && v !== "") {
+      row[c] = v;
+    }
+  }
+
+  // GALLERI / ALBUMS default-logik
+  if (tabKey === "GALLERI") {
+    applyGalleryRowDefaults_(headers, row);
+  }
+
+  if (tabKey === "GALLERI_ALBUMS") {
+    applyGalleryAlbumDefaults_(headers, row);
+  }
+
+  var newRowIndex = sheet.getLastRow() + 1;
+  sheet.getRange(newRowIndex, 1, 1, lastCol).setValues([row]);
+
+  var item = {};
+  item._row = newRowIndex;
+  for (var j = 0; j < lastCol; j++) {
+    var name = headers[j];
+    if (!name) continue;
+    item[name] = row[j];
+  }
+
+  return { row: newRowIndex, item: item };
+}
+
+function adminUpdateRow(sheet, rowNumber, body) {
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  var rowValues = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+  var tabKey = String(sheet.getName() || "").toUpperCase();
+
+  for (var c = 0; c < headers.length; c++) {
+    var hName = headers[c];
+    if (!hName) continue;
+
+    if (body.hasOwnProperty(hName)) {
+      rowValues[c] = body[hName];
+    }
+  }
+
+  // GALLERI / ALBUMS default-logik
+  if (tabKey === "GALLERI") {
+    applyGalleryRowDefaults_(headers, rowValues);
+  }
+
+  if (tabKey === "GALLERI_ALBUMS") {
+    applyGalleryAlbumDefaults_(headers, rowValues);
+  }
+
+  // auto updated_at hvis kolonnen findes
+  var idxUpdated = headers.indexOf("updated_at");
+  if (idxUpdated !== -1) {
+    rowValues[idxUpdated] = formatDate(new Date());
+  }
+
+  sheet.getRange(rowNumber, 1, 1, lastCol).setValues([rowValues]);
+
+  var item = {};
+  item._row = rowNumber;
+  for (var j = 0; j < lastCol; j++) {
+    var name = headers[j];
+    if (!name) continue;
+    item[name] = rowValues[j];
+  }
+
+  return { row: rowNumber, item: item };
+}
+
+/**
+ * Markerer en indmelding som betalt og opretter medlem i MEDLEMMER.
+ * Kopierer værdier baseret på matchende header-navne.
+ */
+function markPaid(tabName, rowNumber, paymentMethod) {
+  var ss = getSpreadsheet();
+
+  // INDMELDINGER
+  var inSheet = ss.getSheetByName(tabName);
+  if (!inSheet) throw new Error("Unknown INDMELDINGER tab: " + tabName);
+
+  var inHeader = getHeaderMap(inSheet);
+  var inHeaders = inHeader.headers;
+  var inLastCol = inHeader.lastCol;
+
+  if (rowNumber < 2 || rowNumber > inSheet.getLastRow()) {
+    throw new Error("Row out of range in " + tabName + ": " + rowNumber);
+  }
+
+  var rowValues = inSheet.getRange(rowNumber, 1, 1, inLastCol).getValues()[0];
+  var nowStr = formatDate(new Date());
+  var method = (paymentMethod || "MobilePay").toString().trim() || "MobilePay";
+
+  function str__(v) { return (v === undefined || v === null) ? "" : String(v).trim(); }
+
+  function idxIn_(name) { return inHeaders.indexOf(name); }
+  function getIn_(name) {
+    var idx = idxIn_(name);
+    return idx !== -1 ? rowValues[idx] : "";
+  }
+  function setIn_(name, value) {
+    var idx = idxIn_(name);
+    if (idx !== -1) rowValues[idx] = value;
+  }
+
+  function isBadLikeMobilePay_(v) {
+    var s = str__(v).toLowerCase();
+    return !s || s === "mobilepay" || s === "mobile pay";
+  }
+
+  // Status + betaling
+  setIn_("status", "paid");
+  setIn_("payment_method", method);
+  setIn_("payment_date", nowStr);
+  setIn_("updated_at", nowStr);
+
+  // Hvis nogle felter ved en fejl ender med "mobilepay", så rydder vi dem her
+  ["member_id", "member_code", "admin_note", "row_id", "household_size", "family_members_json"].forEach(function(k) {
+    var idx = idxIn_(k);
+    if (idx !== -1 && String(rowValues[idx] || "").toLowerCase() === "mobilepay") {
+      rowValues[idx] = "";
+    }
+  });
+
+  // MEDLEMMER
+  var memberSheet = ss.getSheetByName("MEDLEMMER");
+  if (!memberSheet) throw new Error("Unknown tab: MEDLEMMER");
+
+  var memHeader = getHeaderMap(memberSheet);
+  var memHeaders = memHeader.headers;
+  var memLastCol = memHeader.lastCol;
+
+  // Pakkeinfo
+  var packageTitle = str__(getIn_("package_title") || getIn_("package") || getIn_("membership"));
+  var packageKey = str__(getIn_("package_key"));
+  var isFamilyPackage = /familie/i.test(packageTitle) || /familie/i.test(packageKey);
+
+  // Familie-data (fra INDMELDINGER)
+  var familyList = [];
+  var familyJson = str__(getIn_("family_members_json"));
+  if (familyJson) {
+    try {
+      var parsed = JSON.parse(familyJson);
+      if (parsed && parsed.length) familyList = parsed;
+    } catch (eFamParse) {}
+  }
+
+  var adminNote = str__(getIn_("admin_note"));
+  var alreadyCreated = adminNote.indexOf("[FAMILY_CREATED]") !== -1;
+
+  // Vi indsætter altid hovedmedlem som første række, med UPSERT hvis member_id allerede findes
+  var baseRowIndex = memberSheet.getLastRow() + 1; // næste tomme række
+  var mainRowIndex = baseRowIndex;
+
+  // [HELP:MARKPAID_UPSERT] START
+  function findMemberRowById_(id) {
+    id = str__(id);
+    if (!id) return 0;
+    var colIdx = memHeaders.indexOf("member_id");
+    if (colIdx === -1) return 0;
+
+    var lastRow = memberSheet.getLastRow();
+    if (lastRow < 2) return 0;
+
+    var values = memberSheet.getRange(2, colIdx + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < values.length; i++) {
+      if (str__(values[i][0]) === id) return i + 2;
+    }
+    return 0;
+  }
+  // [HELP:MARKPAID_UPSERT] END
+
+  // Sørg for medlemsnummer i INDMELDINGER
+  var memberId = str__(getIn_("member_id"));
+  if (memberId && /^HDK-\d{4}$/.test(memberId)) {
+    var existingRow = findMemberRowById_(memberId);
+    if (existingRow) mainRowIndex = existingRow;
+  }
+  if (!memberId || isBadLikeMobilePay_(memberId) || !/^HDK-\d{4}$/.test(memberId)) {
+    memberId = makeMemberId_(mainRowIndex);
+    setIn_("member_id", memberId);
+
+    // Edge-case: hvis ID allerede findes, så opdatér den række i stedet
+    var existing2 = findMemberRowById_(memberId);
+    if (existing2) mainRowIndex = existing2;
+  }
+
+  // Sørg for member_code (genbrug eksisterende fra MEDLEMMER hvis den findes)
+  var memberCode = str__(getIn_("member_code"));
+  var existingCode = "";
+  if (mainRowIndex !== baseRowIndex) {
+    var idxCode = memHeaders.indexOf("member_code");
+    if (idxCode !== -1) existingCode = str__(memberSheet.getRange(mainRowIndex, idxCode + 1).getValue());
+  }
+  if (existingCode && /^\d{6}$/.test(existingCode)) {
+    memberCode = existingCode;
+    setIn_("member_code", memberCode);
+  } else {
+    if (!memberCode || isBadLikeMobilePay_(memberCode) || !/^\d{6}$/.test(memberCode)) {
+      memberCode = makeMemberCode_();
+      setIn_("member_code", memberCode);
+    }
+  }
+
+  // Byg række til MEDLEMMER ud fra matchende headers
+  function makeMemberRow_(overrides) {
+    var row = [];
+    for (var i = 0; i < memLastCol; i++) row.push("");
+
+    for (var j = 0; j < memHeaders.length; j++) {
+      var hName = memHeaders[j];
+      if (!hName) continue;
+
+      var value = "";
+
+      if (hName === "status") {
+        value = "active";
+      } else if (hName === "payment_method") {
+        value = method;
+      } else if (hName === "payment_date" || hName === "created_at" || hName === "updated_at" || hName === "start_date") {
+        value = nowStr;
+      } else if (hName === "source_row_id") {
+        var idxRowId = idxIn_("row_id");
+        value = (idxRowId !== -1 && rowValues[idxRowId]) ? rowValues[idxRowId] : String(rowNumber);
+      } else if (hName === "source_form_version") {
+        var idxFV = idxIn_("form_version");
+        value = (idxFV !== -1 && rowValues[idxFV]) ? rowValues[idxFV] : "v3";
+      } else if (hName === "source") {
+        var idxSrc = idxIn_("source");
+        value = (idxSrc !== -1 && rowValues[idxSrc]) ? rowValues[idxSrc] : "website";
+      } else {
+        var idx = idxIn_(hName);
+        value = (idx !== -1) ? rowValues[idx] : "";
+      }
+
+      row[j] = value;
+    }
+
+    // Overrides (styrer fx member_id, navn osv.)
+    if (overrides) {
+      for (var k in overrides) {
+        if (!overrides.hasOwnProperty(k)) continue;
+        var idx2 = memHeaders.indexOf(k);
+        if (idx2 !== -1) row[idx2] = overrides[k];
+      }
+    }
+
+    return row;
+  }
+
+  var mainMemRow = makeMemberRow_({
+    member_id: memberId,
+    member_code: memberCode
+  });
+
+  // Familie-medlemmer: opret ekstra rækker ved markPaid (MODEL A)
+  var familyRows = [];
+  var familyCreated = [];
+  var familySkipped = "";
+  var familyStartRowIndex = 0;
+
+  if (isFamilyPackage && familyList && familyList.length) {
+    if (alreadyCreated) {
+      familySkipped = "already_created";
+    } else {
+      // Hvis hovedmedlemmet er UPSERT (findes allerede), så skriv familie nederst for at undgå at overskrive andre rækker
+      familyStartRowIndex = (mainRowIndex === baseRowIndex) ? (baseRowIndex + 1) : (memberSheet.getLastRow() + 1);
+
+      // [HELP:MARKPAID_FAMILY_DOB] START
+      function pick_(obj, keys) {
+        for (var i = 0; i < keys.length; i++) {
+          var v = obj[keys[i]];
+          if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+        }
+        return "";
+      }
+      function splitFullName_(full) {
+        full = str__(full);
+        if (!full) return { fn: "", ln: "" };
+        var parts = full.split(/\s+/).filter(Boolean);
+        if (parts.length <= 1) return { fn: full, ln: "" };
+        var ln = parts.pop();
+        var fn = parts.join(" ");
+        return { fn: fn, ln: ln };
+      }
+
+      for (var f = 0; f < familyList.length; f++) {
+        var fam = familyList[f] || {};
+
+        // VIGTIGT: dit sheet bruger typisk first/last (ikke first_name/last_name)
+        var fn = pick_(fam, ["first_name", "first", "fornavn", "firstname"]);
+        var ln = pick_(fam, ["last_name", "last", "efternavn", "lastname"]);
+
+        if (!fn && !ln) {
+          var sp = splitFullName_(pick_(fam, ["name", "full_name", "fullname"]));
+          fn = sp.fn; ln = sp.ln;
+        }
+
+        var bd = pick_(fam, ["birth_date", "birthDate", "fødselsdato", "birthdate", "dob"]);
+        var by = pick_(fam, ["birth_year", "fødselsår", "birthYear"]);
+        if (!by && bd) by = String(bd).slice(0, 4);
+
+        var famRowIndex = familyStartRowIndex + f;
+        var famMemberId = makeMemberId_(famRowIndex);
+
+        var famRow = makeMemberRow_({
+          member_id: famMemberId,
+          member_code: "",
+
+          first_name: fn,
+          last_name: ln,
+          birth_year: by,
+          birth_date: bd
+        });
+
+        familyRows.push(famRow);
+        familyCreated.push({ member_id: famMemberId, first_name: fn, last_name: ln, birth_year: by, birth_date: bd });
+      }
+      // [HELP:MARKPAID_FAMILY_DOB] END
+
+      if (familyCreated.length) {
+        var ids = familyCreated.map(function(x) { return x.member_id; }).join(",");
+        var note = adminNote ? (adminNote + " ") : "";
+        note += "[FAMILY_CREATED] " + ids;
+        setIn_("admin_note", note.trim());
+      }
+    }
+  } else {
+    familySkipped = isFamilyPackage ? "no_family_list" : "not_family";
+  }
+
+  // Gem opdateringer i INDMELDINGER (inkl. member_id/code + evt. admin_note)
+  inSheet.getRange(rowNumber, 1, 1, inLastCol).setValues([rowValues]);
+
+  // [HELP:MARKPAID_WRITE_MEMBER] START
+  // Skriv hovedmedlem (UPSERT) + familie-medlemmer (sikkert)
+  memberSheet.getRange(mainRowIndex, 1, 1, memLastCol).setValues([mainMemRow]);
+
+  if (familyRows.length) {
+    memberSheet.getRange(familyStartRowIndex, 1, familyRows.length, memLastCol).setValues(familyRows);
+  }
+  // [HELP:MARKPAID_WRITE_MEMBER] END
+
+  return {
+    tab: tabName,
+    row: rowNumber,
+    status: "paid",
+    member_row: mainRowIndex,
+    member_id: memberId,
+    member_code: memberCode,
+    family_created: (familyCreated && familyCreated.length) ? true : false,
+    family_skipped: familySkipped,
+    family_members: familyCreated
+  };
+}
+
+
+function rejectRow(tabName, rowNumber) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error("Unknown tab: " + tabName);
+
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  if (rowNumber < 2 || rowNumber > sheet.getLastRow()) {
+    throw new Error("Row out of range in " + tabName + ": " + rowNumber);
+  }
+
+  var rowValues = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+
+  var nowStr = formatDate(new Date());
+
+  function setField(name, value) {
+    var idx = headers.indexOf(name);
+    if (idx !== -1) rowValues[idx] = value;
+  }
+
+  setField("status", "rejected");
+  setField("updated_at", nowStr);
+
+  sheet.getRange(rowNumber, 1, 1, lastCol).setValues([rowValues]);
+
+  return { tab: tabName, row: rowNumber, status: "rejected" };
+}
+
+/**
+ * Sætter primary team for et medlem (admin)
+ * Forventer at kolonnen "primary_team" eksisterer i tab
+ */
+function setPrimaryTeam(tabName, rowNumber, team) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error("Unknown tab: " + tabName);
+
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  if (rowNumber < 2 || rowNumber > sheet.getLastRow()) {
+    throw new Error("Row out of range in " + tabName + ": " + rowNumber);
+  }
+
+  var rowValues = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+
+  var idx = headers.indexOf("primary_team");
+  if (idx === -1) throw new Error("Missing column: primary_team");
+
+  rowValues[idx] = team;
+
+  var idxUpdated = headers.indexOf("updated_at");
+  if (idxUpdated !== -1) rowValues[idxUpdated] = formatDate(new Date());
+
+  sheet.getRange(rowNumber, 1, 1, lastCol).setValues([rowValues]);
+
+  return { tab: tabName, row: rowNumber, primary_team: team };
+}
+
+/**************************************
+ * NORMALIZERS (valgfri)
+ **************************************/
+
+function normalizeYesNo(value) {
+  var v = String(value || "").toLowerCase().trim();
+  if (v === "ja" || v === "yes" || v === "true" || v === "1") return true;
+  if (v === "nej" || v === "no" || v === "false" || v === "0") return false;
+  return value;
+}
+
+function normalizeGender(value) {
+  var v = String(value || "").toLowerCase().trim();
+  if (v === "mand" || v === "m") return "Mand";
+  if (v === "kvinde" || v === "k") return "Kvinde";
+  if (!v) return "";
+  return value;
+}
+
+function normalizeLevel(value) {
+  var v = String(value || "").toLowerCase().trim();
+  if (v === "hygge") return "Hygge";
+  if (v === "turnering") return "Turnering";
+  if (!v) return "";
+  return value;
+}
+
+/**************************************
+ * UTIL
+ **************************************/
+
+function formatDate(date) {
+  return Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd HH:mm");
+}
+
+/**************************************
+ * LEGACY / PLACEHOLDERS
+ * (Beholdt for kompatibilitet med admin UI)
+ **************************************/
+
+function inGet(tabName, limit) {
+  var sheet = getSheetByName(tabName);
+  if (!sheet) throw new Error("Unknown tab: " + tabName);
+  return readSheetAsObjects(sheet, limit);
+}
+
+function inSet(tabName, rowNumber, data) {
+  var sheet = getSheetByName(tabName);
+  if (!sheet) throw new Error("Unknown tab: " + tabName);
+
+  var headerInfo = getHeaderMap(sheet);
+  var headers = headerInfo.headers;
+  var lastCol = headerInfo.lastCol;
+
+  var rowValues = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+
+  for (var c = 0; c < headers.length; c++) {
+    var hName = headers[c];
+    if (!hName) continue;
+    if (data.hasOwnProperty(hName)) {
+      rowValues[c] = data[hName];
+    }
+  }
+
+  var idxUpdated = headers.indexOf("updated_at");
+  if (idxUpdated !== -1) rowValues[idxUpdated] = formatDate(new Date());
+
+  sheet.getRange(rowNumber, 1, 1, lastCol).setValues([rowValues]);
+
+  return { tab: tabName, row: rowNumber };
+}
+/*******************************
+ * TEST EMAILS (safe)
+ * Kør disse fra Apps Script editoren.
+ *******************************/
+function TEST_joinMail() {
+  var TEST_TO = "SÆT_DIN_EMAIL_HER"; // fx humlumdartklub@gmail.com eller din egen
+
+  var item = {
+    first_name: "Ernst",
+    last_name: "Test",
+    email: TEST_TO,
+    phone: "12345678",
+    address: "Testvej 1",
+    postcode: "7600",
+    city: "Struer",
+    gender: "Mand",
+    birth_date: "1990-05-12",
+    package_title: "Basis",
+    level: "Senior",
+    price_amount: "350",
+    price_unit: "kr./md",
+    remark: "Dette er en test. Hvis du kan læse det her, spiller bemærkning-feltet.",
+    household_size: "3",
+    family_members_json: JSON.stringify([
+      { first_name: "Anna", last_name: "Test", birth_year: "2012" },
+      { first_name: "Max", last_name: "Test", birth_year: "2015" }
+    ])
+  };
+
+  var res = sendJoinEmails_(item, "INDMELDINGER");
+  Logger.log(res);
+}
+
+function TEST_sponsorMail() {
+  var TEST_TO = "SÆT_DIN_EMAIL_HER";
+
+  var payload = {
+    firma: "Test Firma ApS",
+    kontakt: "Ernst Test",
+    email: TEST_TO,
+    telefon: "12345678",
+    website: "https://example.com",
+    level: "Sølv (test)",
+    kommentar: "Sponsor test – hvis du ser dette, er sponsor-teksten korrekt."
+  };
+
+  var res = sendSponsorEmails_(payload);
+  Logger.log(res);
+}
+
+function TEST_tryoutMail() {
+  var TEST_TO = "humlumdartklub@gmail.com";
+
+  var payload = {
+    name: "Ernst Test",
+    email: TEST_TO,
+    phone: "12345678",
+    date: "2025-12-16",
+    time: "19:00",
+    note: "Prøvetræning test – jeg er helt ny og vil bare prøve det af."
+  };
+
+  var res = sendTryoutEmails_(payload);
+  Logger.log(res);
+}
+function TEST_joinMail_FAMILY() {
+  var TEST_TO = "humlumdartklub@gmail.com";
+
+  var item = {
+    first_name: "Ernst",
+    last_name: "FamilieTest",
+    email: TEST_TO,
+    phone: "12345678",
+    address: "Familievej 2",
+    postcode: "7600",
+    city: "Struer",
+
+    // 👇 vigtigt: gør den til Familie
+    package_title: "Familie",
+    level: "Senior",
+    price_amount: "600",
+    price_unit: "kr./år",
+
+    // 👇 familie-data (kun her)
+    household_size: "3",
+    family_members_json: JSON.stringify([
+      { first_name: "Anna", last_name: "FamilieTest", birth_year: "2012" },
+      { first_name: "Max", last_name: "FamilieTest", birth_year: "2015" }
+    ]),
+
+    remark: "Familie test – der skal komme en pæn liste med medlemmer (ikke JSON)."
+  };
+
+  var res = sendJoinEmails_(item, "INDMELDINGER");
+  Logger.log(res);
+}
+
+/*************************
+ * TEST: fuld flow (skriver til ark + markPaid)
+ *************************/
+function TEST_fullFlow_FAMILY_WRITE_AND_MARKPAID() {
+  var TEST_TO = "humlumdartklub@gmail.com";
+
+  // 1) Simulér en familie-indmelding (SKRIVER til INDMELDINGER)
+  var body = {
+    source: "TEST",
+    form_version: "website",
+    status: "pending",
+
+    package_key: "familie",
+    package_title: "Familie",
+    price_amount: "99",
+    price_unit: "kr./md.",
+
+    level: "", // Familie har typisk ikke Hygge/Senior osv. – men må gerne være tom
+    gender: "Mand",
+    first_name: "Ernst",
+    last_name: "FamilieTest",
+    birth_date: "1990-05-12",
+    email: TEST_TO,
+    phone: "12345678",
+    address: "Familievej 2",
+    postcode: "7600",
+    city: "Struer",
+    remark: "Familie test – forventer at familie-medlemmer oprettes i MEDLEMMER ved markPaid.",
+
+    household_size: "3",
+    family_members_json: JSON.stringify([
+      { first_name: "Anna", last_name: "FamilieTest", birth_year: "2012" },
+      { first_name: "Max", last_name: "FamilieTest", birth_year: "2015" }
+    ])
+  };
+
+  var res = createRowFromBody("INDMELDINGER", body);
+  Logger.log("createRowFromBody: " + JSON.stringify(res));
+
+  // 2) Marker betalt (opretter MEDLEMMER + evt. familie-medlemmer)
+  var mp = markPaid("INDMELDINGER", res.row, "MobilePay");
+  Logger.log("markPaid: " + JSON.stringify(mp));
+
+  // 3) Send velkomstmail (member + club)
+  var mailRes = sendPaidEmails_(res.item, "INDMELDINGER", res.row, mp.member_row, mp.member_id, mp.member_code, "MobilePay");
+  Logger.log("sendPaidEmails_: " + JSON.stringify(mailRes));
+}
+
+function TEST_fullFlow_BASIS_WRITE_AND_MARKPAID() {
+  var TEST_TO = "humlumdartklub@gmail.com";
+
+  var body = {
+    source: "TEST",
+    form_version: "website",
+    status: "pending",
+
+    package_key: "basis",
+    package_title: "Basis",
+    price_amount: "99",
+    price_unit: "kr./md.",
+
+    level: "Hygge",
+    gender: "Mand",
+    first_name: "Ernst",
+    last_name: "BasisTest",
+    birth_date: "1990-05-12",
+    email: TEST_TO,
+    phone: "12345678",
+    address: "Testvej 1",
+    postcode: "7600",
+    city: "Struer",
+    remark: "Basis test – må IKKE vise familie-medlemmer.",
+
+    household_size: "1",
+    family_members_json: ""
+  };
+
+  var res = createRowFromBody("INDMELDINGER", body);
+  Logger.log("createRowFromBody: " + JSON.stringify(res));
+
+  var mp = markPaid("INDMELDINGER", res.row, "MobilePay");
+  Logger.log("markPaid: " + JSON.stringify(mp));
+  function TEST_adminCreateRow_GALLERI() {
+  var e = {
+    parameter: {
+      key: ADMIN_KEY
+    },
+    postData: {
+      contents: JSON.stringify({
+        action: "admincreaterow",
+        tab: "GALLERI",
+        row_key: "gallery_test_" + new Date().getTime(),
+        file_url: "https://example.com/test.jpg",
+        type: "image",
+        category: "Test",
+        title: "TEST adminCreateRow",
+        description: "Direkte test fra Apps Script",
+        alt_text: "TEST adminCreateRow",
+        visible: "YES",
+        order: "999",
+        source: "gas-test"
+      })
+    }
+  };
+
+  var res = doPost(e);
+  Logger.log(res.getContent());
+}
+
+  var mailRes = sendPaidEmails_(res.item, "INDMELDINGER", res.row, mp.member_row, mp.member_id, mp.member_code, "MobilePay");
+  Logger.log("sendPaidEmails_: " + JSON.stringify(mailRes));
+}
+
+function TEST_adminCreateRow_GALLERI() {
+  var e = {
+    parameter: {
+      key: ADMIN_KEY
+    },
+    postData: {
+      contents: JSON.stringify({
+        action: "admincreaterow",
+        tab: "GALLERI",
+        row_key: "gallery_test_" + new Date().getTime(),
+        file_url: "https://example.com/test.jpg",
+        type: "image",
+        category: "Test",
+        title: "TEST adminCreateRow",
+        description: "Direkte test fra Apps Script",
+        alt_text: "TEST adminCreateRow",
+        visible: "YES",
+        order: "999",
+        source: "gas-test"
+      })
+    }
+  };
+
+  var res = doPost(e);
+  Logger.log(res.getContent());
+}

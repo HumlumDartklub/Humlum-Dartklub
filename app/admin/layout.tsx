@@ -14,6 +14,7 @@ const ADMIN_LINKS = [
   { href: "/admin/medlemmer", label: "Medlemmer" },
   { href: "/admin/ticker", label: "Ticker & nyheder" },
   { href: "/admin/pakker", label: "Pakker" },
+  { href: "/admin/sponsorvaeg", label: "Sponsorvæg" },
   { href: "/admin/konkurrencer", label: "Konkurrencer" },
   { href: "/admin/kasserer-dashboard", label: "Kasserer" },
 ] as const;
@@ -25,6 +26,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/admin/medlemmer": "Medlemmer",
   "/admin/ticker": "Ticker & nyheder",
   "/admin/pakker": "Pakker",
+  "/admin/sponsorvaeg": "Sponsorvæg",
   "/admin/konkurrencer": "Konkurrencer",
   "/admin/kasserer-dashboard": "Kasserer-dashboard",
   "/admin/login": "Bestyrelseslogin",

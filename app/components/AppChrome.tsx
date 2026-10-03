@@ -16,7 +16,8 @@ function shouldHidePublicChrome(pathname: string): boolean {
     p.startsWith("/admin") ||
     p.startsWith("/medlemszone") ||
     p.startsWith("/medlemslogin") ||
-    p.startsWith("/viewer")
+    p.startsWith("/viewer") ||
+    p.startsWith("/sponsorvaeg/tv")
   );
   // [HELP:CHROME:HIDE] END
 }
