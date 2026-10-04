@@ -1,11 +1,17 @@
-HDK Sponsorvæg – Bliv sponsor FIX
+HDK Sponsorvæg – TV Fullscreen patch
 
-Denne patch ændrer standardteksten "Bliv støtte" til "Bliv sponsor".
+Indhold:
+- app/sponsorvaeg/tv/page.tsx
+- components/TvFullscreenButton.tsx
 
-1) Kopiér mappen lib ind i projektets rod og erstat filen lib/sponsorWall.ts.
-2) Hvis du bruger Google Apps Script-indstillingerne til CTA, erstat Code.gs med indholdet fra HDK_Code_med_sponsorvaeg_BLIV_SPONSOR_FIX.txt.
-3) Gem og deploy Apps Script som en ny version.
-4) Genstart localhost / Vercel build.
-5) Gå til Admin > Sponsorvæg og klik "Klargør sponsorvæg" hvis feltet stadig har gammel standardværdi.
+Installation:
+1. Kopiér mapperne app og components ind i roden af dit eksisterende Next.js-projekt.
+2. Tillad overskrivning af app/sponsorvaeg/tv/page.tsx.
+3. Genstart localhost / deploy til Vercel.
+4. Åbn /sponsorvaeg/tv på TV'et.
+5. Tryk "Vis i fuld skærm" med fjernbetjeningen.
 
-Bemærk: Har cta_button allerede værdien "Bliv støtte" i SPONSORVAEG_TEKST, vil eksisterende data normalt vinde over standardkoden. I så fald skal værdien ændres til "Bliv sponsor" i arket/admin eller slettes og klargøres igen.
+Ingen ændring af Code.gs er nødvendig.
+
+Bemærk:
+Nogle Smart-TV browsere tillader ikke web-sider at skjule browserens adresse-/fanebjælke via Fullscreen API. Hvis browseren afviser det, viser siden en besked om at bruge TV-browserens egen fuldskærmsfunktion.
