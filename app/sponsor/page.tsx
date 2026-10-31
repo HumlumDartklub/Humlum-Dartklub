@@ -158,7 +158,7 @@ const ADDONS_FALLBACK: AddOn[] = [
  * Banesponsor-konfiguration (kan ændres senere)
  * [HELP:SPONSOR:BANES] END */
 const BANESPONSOR_ADDON_KEY: AddOnKey = "gear";
-const BANESPONSOR_LANES: number[] = Array.from({ length: 12 }, (_, i) => i + 1);
+const BANESPONSOR_LANES: number[] = Array.from({ length: 13 }, (_, i) => i + 1);
 
 /**
  * Fallback for optagede baner, hvis BANESPONSOR_BANER-fanen ikke findes
@@ -309,16 +309,16 @@ function filterVisibleAddOns(addOns: AddOn[]): AddOn[] {
 
 /* [HELP:SPONSOR:SHEET:MAP_ADDONS] END */
 
-/* [HELP:SPONSOR:EXPANSION:CONFIG] START — fundraising til nye rammer */
+/* [HELP:SPONSOR:EXPANSION:CONFIG] START — støtte til klubbens udvikling */
 const EXPANSION_QUICK_AMOUNTS = [250, 500, 1000, 2500, 5000, 10000];
 
 const EXPANSION_PURPOSES = [
-  "Nye dartbaner 7–12",
+  "Dartudstyr og baneforbedringer",
   "Paradart & tilgængelighed",
-  "Ungdom & prøvepile",
+  "Ungdom og nye spillere",
   "Digital scoring / skærme",
-  "Lys, akustik & materialer",
-  "Lounge & klubmiljø",
+  "Lys, akustik og materialer",
+  "Klubmiljø og sociale aktiviteter",
   "Generel støtte",
 ];
 /* [HELP:SPONSOR:EXPANSION:CONFIG] END */
@@ -422,6 +422,8 @@ export default function SponsorPage() {
 
   /* [HELP:SPONSOR:STATE:BANE-LANES] START — optagede baner fra Sheet */
   const [laneOptions, setLaneOptions] = useState<number[]>(BANESPONSOR_LANES);
+  const [lanesLoaded, setLanesLoaded] = useState(false);
+  const [lanesError, setLanesError] = useState(false);
   const [takenLanes, setTakenLanes] = useState<number[]>(
     BANESPONSOR_TAKEN_LANES_FALLBACK,
   );
@@ -434,10 +436,10 @@ export default function SponsorPage() {
             SHEET_TAB_BANESPONSOR_LANES,
           )}&key=${encodeURIComponent(SHEET_KEY)}`,
         );
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("Kunne ikke hente baner");
 
         const data = (await res.json()) as ApiListResponse;
-        if (!data.ok || !data.items?.length) return;
+        if (!data.ok || !data.items?.length) throw new Error("Ingen banedata fra Sheet");
 
         const parsed = data.items
           .map((row) => {
@@ -463,10 +465,14 @@ export default function SponsorPage() {
         const allLanes = parsed.map((x) => x.lane).sort((a, b) => a - b);
         const taken = parsed.filter((x) => x.taken).map((x) => x.lane);
 
-        if (allLanes.length) setLaneOptions(allLanes);
+        if (!allLanes.length) throw new Error("Ingen gyldige baner");
+        setLaneOptions(allLanes);
         setTakenLanes(taken);
+        setLanesLoaded(true);
+        setLanesError(false);
       } catch (err) {
         console.error("Fejl ved hentning af BANESPONSOR_BANER", err);
+        setLanesError(true);
       }
     })();
   }, []);
@@ -519,6 +525,7 @@ export default function SponsorPage() {
   const toggleAddon = (k: AddOnKey) =>
     setSelectedAddOns((s) => {
       const next = !s[k];
+      if (isBanesponsorAddonKey(k) && next && (!lanesLoaded || laneOptions.every(l => takenLanes.includes(l)))) return s;
       const updated = { ...s, [k]: next };
       if (isBanesponsorAddonKey(k) && !next) {
         setSelectedLane(null);
@@ -527,7 +534,7 @@ export default function SponsorPage() {
     });
 
   const handleSelectLane = (lane: number) => {
-    if (takenLanes.includes(lane)) return;
+    if (!lanesLoaded || takenLanes.includes(lane) || !laneOptions.includes(lane)) return;
 
     setSelectedLane(lane);
     setSelectedAddOns((s) => ({
@@ -535,6 +542,7 @@ export default function SponsorPage() {
       [banesponsorAddonKey]: true,
     }));
   };
+  const allLanesTaken = lanesLoaded && laneOptions.length > 0 && laneOptions.every((lane) => takenLanes.includes(lane));
   /* [HELP:SPONSOR:STATE:ADDONS] END */
 
   /* [HELP:SPONSOR:COMPUTE:BASE] START — pris for valgt pakke */
@@ -566,7 +574,7 @@ export default function SponsorPage() {
   const oneClick = clickActive && clickAmount > 0 ? clamp(clickAmount, CLICK_MIN, CLICK_MAX) : 0;
   /* [HELP:SPONSOR:COMPUTE:ONECLICK] END */
 
-  /* [HELP:SPONSOR:COMPUTE:EXPANSION] START — valgfri udvidelsesstøtte */
+  /* [HELP:SPONSOR:COMPUTE:EXPANSION] START — valgfri udviklingsstøtte */
   const expansionSupport = expansionActive && expansionAmount > 0
     ? clamp(expansionAmount, CLICK_MIN, CLICK_MAX)
     : 0;
@@ -686,8 +694,8 @@ export default function SponsorPage() {
   /* [HELP:SPONSOR:SUMMARY:BUILD] END */
 
   /* [HELP:SPONSOR:SUMMARY:ACTIONS] START — download / mail / form knappernes logik */
-  const SPONSOR_AGREEMENT_PDF = "/docs/HDK_Sponsoraftale_2026_27.pdf";
-  const BANESPONSOR_AGREEMENT_PDF = "/docs/HDK_Banesponsor_aftale_2026_27.pdf";
+  const SPONSOR_AGREEMENT_PDF = "/docs/HDK_Sponsoraftale.pdf";
+  const BANESPONSOR_AGREEMENT_PDF = "/docs/HDK_Banesponsor_aftale.pdf";
 
   const CLUB_EMAIL = "humlumdartklub@gmail.com";
 
@@ -1051,14 +1059,15 @@ export default function SponsorPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">
-                      Fundraising · nye rammer
+                      Støt fællesskabet · klubudvikling
                     </p>
                     <h3 className="mt-1 text-xl font-extrabold text-gray-950">
-                      🏗️ Støt klubbens udvikling
+                      🎯 Støt klubbens udvikling
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-gray-700">
-                      Hjælp os med at skabe et stærkere klubmiljø med op til 12 baner,
-                      paradart, ungdom, digital scoring og bedre rammer for events.
+                      Vi har fået vores eget klubhus på Gørtlervej 2C i Struer.
+                      Med din støtte kan vi udvikle vores dartudstyr, styrke
+                      ungdoms- og paradart og skabe endnu flere aktiviteter for alle.
                     </p>
                   </div>
                   <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-gray-800">
@@ -1161,12 +1170,20 @@ export default function SponsorPage() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-sm">
-                <img
-                  src="/images/koncept/hdk-udvidelse-perspektiv.jpg"
-                  alt="Støt Humlum Dartklub – fællesskab, turneringer og oplevelser"
-                  className="h-full min-h-[280px] w-full object-cover"
-                />
+              <div className="flex min-h-[280px] flex-col justify-between rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 p-6 text-white shadow-sm">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Fællesskab &amp; præcision</p>
+                  <h4 className="mt-4 text-2xl font-extrabold leading-tight">Et klubhus med plads til alle 🎯</h4>
+                  <p className="mt-3 text-sm leading-relaxed text-blue-100">
+                    Vi bygger videre på det fællesskab, vi har skabt – med plads til
+                    begyndere, erfarne spillere, ungdom og paradart.
+                  </p>
+                </div>
+                <div className="mt-6 border-t border-white/20 pt-4">
+                  <p className="text-sm font-semibold text-orange-200">Din støtte gør en forskel</p>
+                  <p className="mt-1 text-xs text-blue-100">Udstyr · Tilgængelighed · Træning · Arrangementer</p>
+                  <p className="mt-3 text-xs text-blue-200">Gørtlervej 2C · 7600 Struer</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1213,14 +1230,17 @@ export default function SponsorPage() {
                 {isBane && (
                   <div className="mt-3 rounded-2xl border border-slate-200 bg-orange-50/60 p-3">
                     <p className="text-xs font-semibold text-gray-800">
-                      Ønsket bane
+                      {allLanesTaken ? "🎯 Alle banesponsorater er besat" : "Ønsket bane"}
                     </p>
                     <p className="mt-1 text-xs text-gray-700">
-                      Vælg hvilken bane I primært ønsker at støtte. Antal baner
-                      og endelig aftale fastlægges sammen med klubben.
+                      {allLanesTaken
+                        ? "Tak til vores banesponsorer! Kontakt os gerne om fremtidige muligheder."
+                        : !lanesLoaded
+                          ? (lanesError ? "Banestatus kunne ikke hentes. Kontakt klubben for aktuelle muligheder." : "Henter ledige baner fra Google Sheets…")
+                          : "Vælg en ledig bane. Banestatus opdateres fra klubbens Google Sheets."}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {laneOptions.map((lane) => {
+                      {lanesLoaded && laneOptions.map((lane) => {
                         const laneActive = selectedLane === lane;
                         const laneTaken = takenLanes.includes(lane);
                         return (
@@ -1258,9 +1278,9 @@ export default function SponsorPage() {
                   <button
                     type="button"
                     onClick={() => toggleAddon(a.key)}
-                    className="w-full btn btn-primary"
+                    className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {active ? "Fjern tilkøb" : "Vælg tilkøb"}
+                    {isBane ? (active ? "Fjern banevalg" : allLanesTaken ? "Alle baner optaget" : "Vælg en ledig bane ovenfor") : active ? "Fjern tilkøb" : "Vælg tilkøb"}
                   </button>
                   {/* Banesponsor-aftale PDF-link er flyttet til opsummeringsfeltet nederst */}
                 </div>
