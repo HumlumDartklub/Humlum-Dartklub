@@ -332,7 +332,7 @@ export default function OmPage() {
   /** [HELP:OM:DERIVED:TRYOUT_DAYS] START */
   const tryoutDayLabels = useMemo(() => {
     const labels = tryoutRows.map(compactTryoutLabel).filter(Boolean);
-    return labels.length ? labels : ["Tirsdag 18:00-21:30", "Torsdag 18:00-21:30"];
+    return labels.length ? labels : ["Tirsdag 18:30-21:00", "Torsdag 18:30-21:00"];
   }, [tryoutRows]);
   /** [HELP:OM:DERIVED:TRYOUT_DAYS] END */
 
